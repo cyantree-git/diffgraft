@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "crates/diffgraft-core",
+  "apps/desktop/src-tauri",
+]
+resolver = "2"
