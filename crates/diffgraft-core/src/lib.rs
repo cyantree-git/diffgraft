@@ -102,6 +102,27 @@ pub struct MergeConfig {
     pub output_path: Option<String>,
 }
 
+/// A compact, human-readable summary derived from a [`DiffResult`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiffSummary {
+    /// Rows present in B but not in A.
+    pub added: usize,
+    /// Rows present in A but not in B.
+    pub deleted: usize,
+    /// Rows present in both files but with at least one changed cell.
+    pub modified: usize,
+    /// Rows present in both files with identical values.
+    pub unchanged: usize,
+    /// Total data rows in file A.
+    pub total_a: usize,
+    /// Total data rows in file B.
+    pub total_b: usize,
+    /// True when any columns were added or removed between A and B.
+    pub has_schema_changes: bool,
+    /// Total number of added + removed columns.
+    pub schema_changes_count: usize,
+}
+
 /// The result of a merge operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MergeResult {

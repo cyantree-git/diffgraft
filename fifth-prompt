@@ -1,0 +1,128 @@
+git add .
+git commit -m "feat: implement merge.rs with cherry-pick engine
+
+- cherry_pick_merge: cell-level selective merge
+- Validates before mutating — input files never corrupted
+- O(n) key map for both selection and new-row append
+- Handles new rows from B, retained rows from A
+- find_row_by_key: graceful None on missing data
+- 12 new tests including cell-level correctness proof
+- 51/51 tests passing, zero clippy warnings"
+git push
+```
+
+---
+
+## Where You Are
+```
+✅ diffgraft-core scaffold
+✅ reader.rs — 27 tests
+✅ diff.rs   — 39 tests, 2 bugs caught
+✅ merge.rs  — 51 tests, cherry-pick engine complete
+⬜ export.rs — stub, needs implementation
+⬜ Tauri commands — need wiring to core
+⬜ React UI — needs real implementation
+```
+
+The hard part is done. The core engine — the thing that makes DiffGraft different from every other tool — is built and tested.
+
+---
+
+## Prompt 5 — export.rs
+```
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Current status:
+- reader.rs: 27 tests passing
+- diff.rs:   39 tests passing
+- merge.rs:  51 tests passing
+- All cargo check and clippy clean
+
+Task: Implement export.rs fully.
+
+1. export_csv(
+     rows: &[Vec<String>],
+     schema: &CsvSchema,
+     output_path: Option<&str>,
+   ) -> Result<String, AppError>
+
+   - If output_path is Some(path):
+       Write CSV to that file path
+       Return the path as String
+   - If output_path is None:
+       Return CSV content as String
+       (used by web version and Tauri for download)
+   - First row must be the header from schema.columns
+   - Use csv crate writer
+   - Handle IO errors via AppError::Io
+   - Handle csv errors via AppError::Csv
+
+2. export_diff_json(
+     result: &DiffResult,
+   ) -> Result<String, AppError>
+
+   - Serialise DiffResult to pretty-printed JSON
+   - Use serde_json::to_string_pretty
+   - Return JSON string
+   - This enables CLI and API usage of DiffGraft
+
+3. export_summary(
+     result: &DiffResult,
+   ) -> DiffSummary
+
+   DiffSummary struct (Serialize, Deserialize):
+   - added: usize
+   - deleted: usize
+   - modified: usize
+   - unchanged: usize
+   - total_a: usize
+   - total_b: usize
+   - has_schema_changes: bool
+   - schema_changes_count: usize
+
+   Derive this from DiffResult — no file I/O.
+   Pure function, no Result needed.
+
+Write unit tests:
+
+export_csv:
+- Export 3 rows, None path → verify CSV string correct
+- Export with header → header appears as first row
+- Export empty rows → just header row
+- Export to temp file → file exists and content correct
+
+export_diff_json:
+- Valid DiffResult → valid JSON string
+- JSON contains "added_rows", "deleted_rows",
+  "modified_rows" keys
+- Parses back to DiffResult without loss
+
+export_summary:
+- 3 added, 2 deleted, 5 modified → correct counts
+- Schema changes reflected in has_schema_changes
+- unchanged = total_a - deleted - modified
+
+Run cargo test — all 51 previous tests must pass.
+New export tests must pass.
+Run cargo clippy. Zero warnings.
+Report total test count.
+
+
+
+Claude reply
+
+⏺ 63/63 tests pass. Zero clippy warnings.
+
+  ---
+  What was added:
+
+  lib.rs — DiffSummary struct with 8 fields (Serialize, Deserialize).
+
+  export.rs — Three public functions:
+  - export_csv — None path returns in-memory string via build_csv_string; Some(path) opens the file with std::fs::File::create (surfaces as AppError::Io) then
+  writes via csv::Writer (surfaces as AppError::Csv)
+  - export_diff_json — one-liner wrapping serde_json::to_string_pretty
+  - export_summary — pure derivation; unchanged = total_a.saturating_sub(deleted + modified) to guard against impossible inputs
+
+  12 new tests: 4 for export_csv (string output, header first, empty rows, temp file write/read), 3 for export_diff_json (valid JSON, required keys, lossless
+  roundtrip), 4 for export_summary (counts, schema changes present, schema changes absent, unchanged formula).
