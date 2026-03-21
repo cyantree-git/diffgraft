@@ -1,0 +1,49 @@
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Current status: scaffold complete, cargo check clean.
+
+Task: Implement reader.rs fully.
+
+The scaffold already has function signatures. 
+Implement each function properly:
+
+1. read_csv(path: &str) -> Result<(CsvSchema, Vec<Vec<String>>), AppError>
+   - Use the csv crate to read the file at path
+   - First row is always the header
+   - Return CsvSchema with column names and row count
+   - Return all data rows as Vec<Vec<String>>
+   - Handle: empty file, missing file, malformed CSV
+   - Never panic — all errors via AppError
+
+2. parse_csv_content(content: &str) 
+   -> Result<(CsvSchema, Vec<Vec<String>>), AppError>
+   - Same as read_csv but accepts content as &str
+   - This is the WASM-compatible version
+   - No filesystem access — caller provides content
+   - This is the function the web version will use
+
+3. detect_primary_key_candidates(schema: &CsvSchema) -> Vec<String>
+   - Already implemented in scaffold
+   - Verify it covers:
+     - Ends with: _id, _key, _code, _uuid, _ref
+     - Exactly: id, key, code, uuid, ref
+     - Case insensitive
+   - If already correct leave it unchanged
+
+4. detect_noise_columns(schema: &CsvSchema) -> Vec<String>
+   - Already implemented in scaffold
+   - Verify it covers all noise patterns from CONTEXT.md
+   - If already correct leave it unchanged
+
+Write unit tests for:
+- read_csv with a temp file containing 5 rows
+- parse_csv_content with inline CSV string
+- parse_csv_content with empty string
+- parse_csv_content with header only, no data rows
+- parse_csv_content with missing values (empty cells)
+- detect_primary_key_candidates — verify user_id detected, name not detected
+- detect_noise_columns — verify created_at detected, email not detected
+
+Run cargo test. All tests must pass before stopping.
+Run cargo clippy. Zero warnings before stopping.
+

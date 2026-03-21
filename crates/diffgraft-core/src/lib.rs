@@ -27,7 +27,7 @@ pub struct CsvSchema {
 }
 
 /// Configuration that drives a diff operation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DiffConfig {
     /// Columns whose combined values uniquely identify a row.
     /// An empty vec means diff is performed by row order.
@@ -38,15 +38,6 @@ pub struct DiffConfig {
     pub case_sensitive: bool,
 }
 
-impl Default for DiffConfig {
-    fn default() -> Self {
-        Self {
-            primary_keys: Vec::new(),
-            ignore_columns: Vec::new(),
-            case_sensitive: false,
-        }
-    }
-}
 
 /// The result of comparing two CSV schemas.
 #[derive(Debug, Clone, Serialize, Deserialize)]

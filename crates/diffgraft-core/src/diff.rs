@@ -5,6 +5,9 @@ use crate::{
     DiffResult, ModifiedRow, SchemaDiff,
 };
 
+/// Return type shared by the two private diff strategies.
+type DiffParts = Result<(Vec<usize>, Vec<usize>, Vec<ModifiedRow>), AppError>;
+
 /// Compares the schemas of two CSV files and returns what changed.
 ///
 /// `common_columns` uses indices from `schema_a`.
@@ -204,7 +207,7 @@ fn diff_by_order(
     schema_a: &CsvSchema,
     schema_b: &CsvSchema,
     config: &DiffConfig,
-) -> Result<(Vec<usize>, Vec<usize>, Vec<ModifiedRow>), AppError> {
+) -> DiffParts {
     let common_len = rows_a.len().min(rows_b.len());
 
     let mut modified_rows = Vec::new();
@@ -241,7 +244,7 @@ fn diff_by_key(
     schema_a: &CsvSchema,
     schema_b: &CsvSchema,
     config: &DiffConfig,
-) -> Result<(Vec<usize>, Vec<usize>, Vec<ModifiedRow>), AppError> {
+) -> DiffParts {
     let index_a = build_key_index(rows_a, schema_a, &config.primary_keys)?;
     let index_b = build_key_index(rows_b, schema_b, &config.primary_keys)?;
 
