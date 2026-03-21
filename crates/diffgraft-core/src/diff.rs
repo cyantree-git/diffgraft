@@ -12,35 +12,36 @@ type DiffParts = Result<(Vec<usize>, Vec<usize>, Vec<ModifiedRow>), AppError>;
 ///
 /// `common_columns` uses indices from `schema_a`.
 pub fn diff_schema(schema_a: &CsvSchema, schema_b: &CsvSchema) -> SchemaDiff {
-    let names_a: HashMap<&str, usize> = schema_a
+    // Normalise to lowercase so column matching is case-insensitive.
+    let names_a: HashMap<String, usize> = schema_a
         .columns
         .iter()
-        .map(|c| (c.name.as_str(), c.index))
+        .map(|c| (c.name.to_lowercase(), c.index))
         .collect();
-    let names_b: HashMap<&str, usize> = schema_b
+    let names_b: HashMap<String, usize> = schema_b
         .columns
         .iter()
-        .map(|c| (c.name.as_str(), c.index))
+        .map(|c| (c.name.to_lowercase(), c.index))
         .collect();
 
     let mut added_columns: Vec<ColumnInfo> = schema_b
         .columns
         .iter()
-        .filter(|c| !names_a.contains_key(c.name.as_str()))
+        .filter(|c| !names_a.contains_key(&c.name.to_lowercase()))
         .cloned()
         .collect();
 
     let mut removed_columns: Vec<ColumnInfo> = schema_a
         .columns
         .iter()
-        .filter(|c| !names_b.contains_key(c.name.as_str()))
+        .filter(|c| !names_b.contains_key(&c.name.to_lowercase()))
         .cloned()
         .collect();
 
     let mut common_columns: Vec<ColumnInfo> = schema_a
         .columns
         .iter()
-        .filter(|c| names_b.contains_key(c.name.as_str()))
+        .filter(|c| names_b.contains_key(&c.name.to_lowercase()))
         .cloned()
         .collect();
 
@@ -176,7 +177,7 @@ fn compare_rows(
         let idx_b = schema_b
             .columns
             .iter()
-            .find(|c| c.name == col.name)
+            .find(|c| c.name.eq_ignore_ascii_case(&col.name))
             .map(|c| c.index)
             .unwrap_or(col.index);
         let val_b = row_b.get(idx_b).cloned().unwrap_or_default();
@@ -334,6 +335,17 @@ mod tests {
     }
 
     #[test]
+    fn test_diff_schema_column_added_only() {
+        let a = make_schema(&["id", "name"]);
+        let b = make_schema(&["id", "name", "email"]);
+        let result = diff_schema(&a, &b);
+        assert_eq!(result.added_columns.len(), 1);
+        assert_eq!(result.added_columns[0].name, "email");
+        assert!(result.removed_columns.is_empty());
+        assert_eq!(result.common_columns.len(), 2);
+    }
+
+    #[test]
     fn test_diff_schema_added_and_removed() {
         let a = make_schema(&["id", "name"]);
         let b = make_schema(&["id", "email"]);
@@ -346,22 +358,51 @@ mod tests {
         assert_eq!(result.common_columns[0].name, "id");
     }
 
-    // --- diff_csv: empty inputs ---
+    #[test]
+    fn test_diff_schema_multiple_changes() {
+        let a = make_schema(&["id", "first_name", "last_name", "age"]);
+        let b = make_schema(&["id", "email", "phone", "age"]);
+        let result = diff_schema(&a, &b);
+        assert_eq!(result.added_columns.len(), 2);
+        assert_eq!(result.removed_columns.len(), 2);
+        assert_eq!(result.common_columns.len(), 2); // id and age
+        // Original column order preserved
+        assert_eq!(result.removed_columns[0].name, "first_name");
+        assert_eq!(result.removed_columns[1].name, "last_name");
+        assert_eq!(result.added_columns[0].name, "email");
+        assert_eq!(result.added_columns[1].name, "phone");
+    }
 
     #[test]
-    fn test_diff_csv_empty() {
+    fn test_diff_schema_case_insensitive() {
+        // "ID" in A should match "id" in B — treated as common, not added/removed.
+        let a = make_schema(&["ID", "Name"]);
+        let b = make_schema(&["id", "name", "email"]);
+        let result = diff_schema(&a, &b);
+        assert_eq!(result.common_columns.len(), 2);
+        assert!(result.removed_columns.is_empty());
+        assert_eq!(result.added_columns.len(), 1);
+        assert_eq!(result.added_columns[0].name, "email");
+    }
+
+    // --- diff_csv: both files empty ---
+
+    #[test]
+    fn test_diff_csv_both_empty() {
         let schema = make_schema(&["id", "name"]);
         let config = DiffConfig::default();
         let result = diff_csv(&[], &[], &schema, &schema, &config).unwrap();
         assert!(result.added_rows.is_empty());
         assert!(result.deleted_rows.is_empty());
         assert!(result.modified_rows.is_empty());
+        assert_eq!(result.total_rows_a, 0);
+        assert_eq!(result.total_rows_b, 0);
     }
 
     // --- diff_csv: order-based ---
 
     #[test]
-    fn test_diff_csv_order_no_changes() {
+    fn test_diff_csv_order_identical() {
         let schema = make_schema(&["id", "name"]);
         let rows = vec![
             vec!["1".to_string(), "alice".to_string()],
@@ -375,17 +416,76 @@ mod tests {
     }
 
     #[test]
-    fn test_diff_csv_order_modification() {
+    fn test_diff_csv_order_one_row_modified() {
         let schema = make_schema(&["id", "name"]);
-        let rows_a = vec![vec!["1".to_string(), "alice".to_string()]];
-        let rows_b = vec![vec!["1".to_string(), "ALICE".to_string()]];
+        let rows_a = vec![
+            vec!["1".to_string(), "alice".to_string()],
+            vec!["2".to_string(), "bob".to_string()],
+        ];
+        let rows_b = vec![
+            vec!["1".to_string(), "alice".to_string()],
+            vec!["2".to_string(), "robert".to_string()], // changed
+        ];
         let config = DiffConfig {
             case_sensitive: true,
             ..Default::default()
         };
         let result = diff_csv(&rows_a, &rows_b, &schema, &schema, &config).unwrap();
         assert_eq!(result.modified_rows.len(), 1);
+        assert_eq!(result.modified_rows[0].row_index_a, 1);
         assert_eq!(result.modified_rows[0].changes[0].column, "name");
+        assert_eq!(result.modified_rows[0].changes[0].value_a, "bob");
+        assert_eq!(result.modified_rows[0].changes[0].value_b, "robert");
+    }
+
+    #[test]
+    fn test_diff_csv_order_row_added_at_end() {
+        let schema = make_schema(&["id"]);
+        let rows_a = vec![vec!["1".to_string()], vec!["2".to_string()]];
+        let rows_b = vec![
+            vec!["1".to_string()],
+            vec!["2".to_string()],
+            vec!["3".to_string()],
+        ];
+        let config = DiffConfig::default();
+        let result = diff_csv(&rows_a, &rows_b, &schema, &schema, &config).unwrap();
+        assert_eq!(result.added_rows, vec![2]);
+        assert!(result.deleted_rows.is_empty());
+        assert!(result.modified_rows.is_empty());
+    }
+
+    #[test]
+    fn test_diff_csv_order_row_deleted() {
+        let schema = make_schema(&["id", "name"]);
+        let rows_a = vec![
+            vec!["1".to_string(), "alice".to_string()],
+            vec!["2".to_string(), "bob".to_string()],
+            vec!["3".to_string(), "charlie".to_string()],
+        ];
+        // B has only 2 rows — row at index 2 in A is deleted
+        let rows_b = vec![
+            vec!["1".to_string(), "alice".to_string()],
+            vec!["2".to_string(), "bob".to_string()],
+        ];
+        let config = DiffConfig::default();
+        let result = diff_csv(&rows_a, &rows_b, &schema, &schema, &config).unwrap();
+        assert!(result.added_rows.is_empty());
+        assert_eq!(result.deleted_rows, vec![2]);
+        assert!(result.modified_rows.is_empty());
+    }
+
+    #[test]
+    fn test_diff_csv_order_empty_a_populated_b() {
+        let schema = make_schema(&["id", "name"]);
+        let rows_b = vec![
+            vec!["1".to_string(), "alice".to_string()],
+            vec!["2".to_string(), "bob".to_string()],
+        ];
+        let config = DiffConfig::default();
+        let result = diff_csv(&[], &rows_b, &schema, &schema, &config).unwrap();
+        assert_eq!(result.added_rows, vec![0, 1]);
+        assert!(result.deleted_rows.is_empty());
+        assert!(result.modified_rows.is_empty());
     }
 
     #[test]
@@ -402,45 +502,52 @@ mod tests {
     }
 
     #[test]
-    fn test_diff_csv_order_added_deleted() {
-        let schema = make_schema(&["id"]);
-        let rows_a = vec![vec!["1".to_string()], vec!["2".to_string()]];
-        let rows_b = vec![
-            vec!["1".to_string()],
-            vec!["2".to_string()],
-            vec!["3".to_string()],
-        ];
-        let config = DiffConfig::default();
+    fn test_diff_csv_order_case_sensitive_detects_change() {
+        let schema = make_schema(&["id", "name"]);
+        let rows_a = vec![vec!["1".to_string(), "alice".to_string()]];
+        let rows_b = vec![vec!["1".to_string(), "ALICE".to_string()]];
+        let config = DiffConfig {
+            case_sensitive: true,
+            ..Default::default()
+        };
         let result = diff_csv(&rows_a, &rows_b, &schema, &schema, &config).unwrap();
-        assert_eq!(result.added_rows, vec![2]);
+        assert_eq!(result.modified_rows.len(), 1);
+        assert_eq!(result.modified_rows[0].changes[0].column, "name");
+    }
+
+    #[test]
+    fn test_diff_csv_order_single_row_identical() {
+        let schema = make_schema(&["id"]);
+        let rows = vec![vec!["1".to_string()]];
+        let config = DiffConfig::default();
+        let result = diff_csv(&rows, &rows, &schema, &schema, &config).unwrap();
+        assert!(result.added_rows.is_empty());
         assert!(result.deleted_rows.is_empty());
+        assert!(result.modified_rows.is_empty());
     }
 
     // --- diff_csv: key-based ---
 
     #[test]
-    fn test_diff_csv_key_based_added_deleted() {
-        let schema = make_schema(&["id", "name"]);
-        let rows_a = vec![
-            vec!["1".to_string(), "alice".to_string()],
-            vec!["2".to_string(), "bob".to_string()],
-        ];
-        let rows_b = vec![
-            vec!["1".to_string(), "alice".to_string()],
-            vec!["3".to_string(), "charlie".to_string()],
+    fn test_diff_csv_key_both_identical() {
+        let schema = make_schema(&["id", "name", "value"]);
+        let rows = vec![
+            vec!["1".to_string(), "alice".to_string(), "10".to_string()],
+            vec!["2".to_string(), "bob".to_string(), "20".to_string()],
         ];
         let config = DiffConfig {
             primary_keys: vec!["id".to_string()],
+            case_sensitive: true,
             ..Default::default()
         };
-        let result = diff_csv(&rows_a, &rows_b, &schema, &schema, &config).unwrap();
-        assert_eq!(result.deleted_rows, vec![1]); // row index 1 in A (id=2)
-        assert_eq!(result.added_rows, vec![1]); // row index 1 in B (id=3)
+        let result = diff_csv(&rows, &rows, &schema, &schema, &config).unwrap();
+        assert!(result.added_rows.is_empty());
+        assert!(result.deleted_rows.is_empty());
         assert!(result.modified_rows.is_empty());
     }
 
     #[test]
-    fn test_diff_csv_key_based_modification() {
+    fn test_diff_csv_key_one_row_modified() {
         let schema = make_schema(&["id", "value"]);
         let rows_a = vec![vec!["1".to_string(), "old".to_string()]];
         let rows_b = vec![vec!["1".to_string(), "new".to_string()]];
@@ -457,11 +564,95 @@ mod tests {
     }
 
     #[test]
+    fn test_diff_csv_key_row_added_in_b() {
+        let schema = make_schema(&["id", "name"]);
+        let rows_a = vec![vec!["1".to_string(), "alice".to_string()]];
+        let rows_b = vec![
+            vec!["1".to_string(), "alice".to_string()],
+            vec!["2".to_string(), "bob".to_string()],
+        ];
+        let config = DiffConfig {
+            primary_keys: vec!["id".to_string()],
+            ..Default::default()
+        };
+        let result = diff_csv(&rows_a, &rows_b, &schema, &schema, &config).unwrap();
+        assert_eq!(result.added_rows, vec![1]);
+        assert!(result.deleted_rows.is_empty());
+        assert!(result.modified_rows.is_empty());
+    }
+
+    #[test]
+    fn test_diff_csv_key_row_deleted_from_a() {
+        let schema = make_schema(&["id", "name"]);
+        let rows_a = vec![
+            vec!["1".to_string(), "alice".to_string()],
+            vec!["2".to_string(), "bob".to_string()],
+        ];
+        let rows_b = vec![vec!["1".to_string(), "alice".to_string()]];
+        let config = DiffConfig {
+            primary_keys: vec!["id".to_string()],
+            ..Default::default()
+        };
+        let result = diff_csv(&rows_a, &rows_b, &schema, &schema, &config).unwrap();
+        assert!(result.added_rows.is_empty());
+        assert_eq!(result.deleted_rows, vec![1]);
+        assert!(result.modified_rows.is_empty());
+    }
+
+    #[test]
+    fn test_diff_csv_key_added_and_deleted() {
+        let schema = make_schema(&["id", "name"]);
+        let rows_a = vec![
+            vec!["1".to_string(), "alice".to_string()],
+            vec!["2".to_string(), "bob".to_string()],
+        ];
+        let rows_b = vec![
+            vec!["1".to_string(), "alice".to_string()],
+            vec!["3".to_string(), "charlie".to_string()],
+        ];
+        let config = DiffConfig {
+            primary_keys: vec!["id".to_string()],
+            ..Default::default()
+        };
+        let result = diff_csv(&rows_a, &rows_b, &schema, &schema, &config).unwrap();
+        assert_eq!(result.deleted_rows, vec![1]);
+        assert_eq!(result.added_rows, vec![1]);
+        assert!(result.modified_rows.is_empty());
+    }
+
+    #[test]
+    fn test_diff_csv_key_composite_primary_key() {
+        // Composite key: (country, code) — neither column is unique alone.
+        let schema = make_schema(&["country", "code", "name"]);
+        let rows_a = vec![
+            vec!["US".to_string(), "NYC".to_string(), "New York".to_string()],
+            vec!["US".to_string(), "LAX".to_string(), "Los Angeles".to_string()],
+            vec!["GB".to_string(), "LON".to_string(), "London".to_string()],
+        ];
+        let rows_b = vec![
+            vec!["US".to_string(), "NYC".to_string(), "New York City".to_string()], // modified
+            vec!["US".to_string(), "LAX".to_string(), "Los Angeles".to_string()],
+            vec!["GB".to_string(), "LON".to_string(), "London".to_string()],
+        ];
+        let config = DiffConfig {
+            primary_keys: vec!["country".to_string(), "code".to_string()],
+            case_sensitive: true,
+            ..Default::default()
+        };
+        let result = diff_csv(&rows_a, &rows_b, &schema, &schema, &config).unwrap();
+        assert!(result.added_rows.is_empty());
+        assert!(result.deleted_rows.is_empty());
+        assert_eq!(result.modified_rows.len(), 1);
+        assert_eq!(result.modified_rows[0].key_values, vec!["US", "NYC"]);
+        assert_eq!(result.modified_rows[0].changes[0].column, "name");
+    }
+
+    #[test]
     fn test_diff_csv_duplicate_key_error() {
         let schema = make_schema(&["id", "name"]);
         let rows_a = vec![
             vec!["1".to_string(), "alice".to_string()],
-            vec!["1".to_string(), "bob".to_string()],
+            vec!["1".to_string(), "bob".to_string()], // duplicate id=1
         ];
         let rows_b = vec![vec!["1".to_string(), "charlie".to_string()]];
         let config = DiffConfig {
@@ -473,14 +664,44 @@ mod tests {
     }
 
     #[test]
-    fn test_diff_csv_single_row() {
-        let schema = make_schema(&["id"]);
-        let rows_a = vec![vec!["1".to_string()]];
-        let rows_b = vec![vec!["1".to_string()]];
-        let config = DiffConfig::default();
+    fn test_diff_csv_missing_key_column_error() {
+        let schema = make_schema(&["id", "name"]);
+        let rows = vec![vec!["1".to_string(), "alice".to_string()]];
+        let config = DiffConfig {
+            primary_keys: vec!["nonexistent_col".to_string()],
+            ..Default::default()
+        };
+        let result = diff_csv(&rows, &rows, &schema, &schema, &config);
+        assert!(matches!(result, Err(AppError::MissingColumn(_))));
+    }
+
+    #[test]
+    fn test_diff_csv_key_reordered_zero_modifications() {
+        // Critical: same data in a different row order must produce zero changes
+        // when a primary key is used. This proves key-based matching works.
+        let schema = make_schema(&["id", "name", "value"]);
+        let rows_a = vec![
+            vec!["1".to_string(), "alice".to_string(), "10".to_string()],
+            vec!["2".to_string(), "bob".to_string(), "20".to_string()],
+            vec!["3".to_string(), "charlie".to_string(), "30".to_string()],
+        ];
+        // Exact same data, shuffled order.
+        let rows_b = vec![
+            vec!["3".to_string(), "charlie".to_string(), "30".to_string()],
+            vec!["1".to_string(), "alice".to_string(), "10".to_string()],
+            vec!["2".to_string(), "bob".to_string(), "20".to_string()],
+        ];
+        let config = DiffConfig {
+            primary_keys: vec!["id".to_string()],
+            case_sensitive: true,
+            ..Default::default()
+        };
         let result = diff_csv(&rows_a, &rows_b, &schema, &schema, &config).unwrap();
-        assert!(result.added_rows.is_empty());
-        assert!(result.deleted_rows.is_empty());
-        assert!(result.modified_rows.is_empty());
+        assert!(result.added_rows.is_empty(), "expected no added rows");
+        assert!(result.deleted_rows.is_empty(), "expected no deleted rows");
+        assert!(
+            result.modified_rows.is_empty(),
+            "expected no modifications — reordered rows should match by key"
+        );
     }
 }

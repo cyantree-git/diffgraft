@@ -1,0 +1,120 @@
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Current status:
+- Scaffold complete
+- reader.rs fully implemented, 27 tests passing
+- cargo check and clippy clean
+
+Task: Implement diff.rs fully.
+
+The scaffold already has diff_schema and diff_csv signatures.
+Implement each function properly.
+
+1. diff_schema(schema_a: &CsvSchema, schema_b: &CsvSchema) -> SchemaDiff
+   - Compare columns by name
+   - added_columns:   in B but not in A
+   - removed_columns: in A but not in B
+   - common_columns:  in both A and B
+   - Case insensitive column name comparison
+   - Preserve original column order in results
+
+2. diff_csv(
+     rows_a: &[Vec<String>],
+     rows_b: &[Vec<String>],
+     schema_a: &CsvSchema,
+     schema_b: &CsvSchema,
+     config: &DiffConfig,
+   ) -> Result<DiffResult, AppError>
+
+   Two code paths:
+
+   Path A — Order dependent (config.primary_keys is empty):
+   - Compare row by row in order
+   - Shorter file determines boundary
+   - Extra rows in longer file = added or deleted
+   - Modified = same index, different values
+
+   Path B — Primary key matching (config.primary_keys not empty):
+   - Build HashMap<Vec<String>, usize> for each file
+     keyed by primary key column values
+   - Keys in A not in B → deleted_rows
+   - Keys in B not in A → added_rows
+   - Keys in both → compare non-ignored columns
+     cell by cell → modified_rows
+   - Return AppError::DuplicateKey if primary key
+     is not unique within a file
+   - Return AppError::MissingColumn if primary key
+     column does not exist in schema
+
+   Both paths must:
+   - Respect config.ignore_columns
+   - Respect config.case_sensitive
+   - Populate auto_ignored_columns in DiffResult
+     with columns that were ignored
+
+3. Private helper:
+   fn build_key_index(
+     rows: &[Vec<String>],
+     schema: &CsvSchema,
+     key_columns: &[String],
+   ) -> Result<HashMap<Vec<String>, usize>, AppError>
+
+   - Returns HashMap mapping key values to row index
+   - Returns AppError::DuplicateKey with the
+     duplicate key value in the message if not unique
+   - Returns AppError::MissingColumn if any key
+     column is not in schema
+
+Write unit tests for every scenario:
+
+Schema diff:
+- identical schemas
+- column added in B
+- column removed in B
+- multiple columns added and removed
+- case insensitive column matching
+
+Order dependent diff:
+- identical files
+- one row modified
+- row added at end
+- row deleted from middle
+- empty file A, populated file B
+- both files empty
+
+Primary key diff:
+- both files identical
+- one row modified (key matches, value differs)
+- row added in B (key not in A)
+- row deleted from A (key not in B)
+- composite primary key (two columns)
+- duplicate primary key → AppError::DuplicateKey
+- missing primary key column → AppError::MissingColumn
+- file reordered — same data different order
+  → zero modifications detected
+
+The last test is critical:
+sorted_a vs sorted_b with same data in different order
+must produce DiffResult with zero modifications.
+This proves primary key matching works correctly.
+
+Run cargo test. All tests must pass before stopping.
+Run cargo clippy. Zero warnings before stopping.
+
+
+
+
+PROMPT return by claude 
+
+⏺ 39/39 tests pass. Zero clippy warnings.
+
+  ---
+  Two bugs fixed as part of this task:
+
+  - diff_schema: was using exact-case HashMap<&str, …> keys — columns like "ID" vs "id" would have been reported as removed+added rather than common. Fixed by
+  lowercasing keys.
+  - compare_rows: was using c.name == col.name to look up a column's index in schema_b — would have silently fallen back to schema_a's index if names differed
+  in case. Fixed with eq_ignore_ascii_case.
+
+  New tests added: test_diff_schema_column_added_only, test_diff_schema_multiple_changes, test_diff_schema_case_insensitive, plus nine order-based and
+  key-based diff tests including the reorder proof test.
