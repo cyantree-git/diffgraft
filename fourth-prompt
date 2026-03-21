@@ -1,0 +1,119 @@
+git add .
+git commit -m "feat: implement diff.rs with full test suite
+
+- diff_schema: column-level comparison, case insensitive
+- diff_csv: order-dependent and primary key paths
+- build_key_index: composite key support, duplicate detection
+- Fixed case sensitivity bug in schema column matching
+- Fixed case sensitivity bug in row comparison index lookup
+- 39 unit tests, all passing
+- Zero clippy warnings"
+git push
+```
+
+---
+
+## Prompt 4 — merge.rs Implementation
+```
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Current status:
+- Scaffold complete
+- reader.rs: 27 tests passing
+- diff.rs: 39 tests passing, 2 case sensitivity bugs fixed
+- cargo check and clippy clean throughout
+
+Task: Implement merge.rs fully.
+
+The stub has cherry_pick_merge signature and CellSelection,
+MergeSource types. Implement the full merge engine.
+
+1. cherry_pick_merge(
+     rows_a: &[Vec<String>],
+     rows_b: &[Vec<String>],
+     schema_a: &CsvSchema,
+     config: &MergeConfig,
+     selections: &[CellSelection],
+   ) -> Result<MergeResult, AppError>
+
+Logic:
+- Start with File A as the base output
+- For each CellSelection:
+    - Find the row in rows_a matching key_values
+      using config.primary_keys
+    - Find the row in rows_b matching key_values
+    - If MergeSource::FileB: replace the cell value
+      in that row with the value from rows_b
+    - If MergeSource::FileA: keep the cell value
+      from rows_a (no-op, already the base)
+- Rows in rows_b not in rows_a:
+    - Include them in output (they are new rows)
+- Rows in rows_a not in rows_b:
+    - Keep them in output (they were not deleted)
+- Count: rows_from_a, rows_from_b, total_rows
+- Serialise merged rows to CSV string for output_csv
+- config.primary_keys must not be empty
+  Return AppError::Parse("primary key required for merge")
+  if empty
+
+2. Private helper:
+   fn find_row_by_key(
+     rows: &[Vec<String>],
+     schema: &CsvSchema,
+     key_columns: &[String],
+     key_values: &[String],
+   ) -> Option<usize>
+   Returns the index of the matching row or None.
+
+Write unit tests:
+
+Basic merge:
+- Take all cells from File A → output identical to A
+- Take all cells from File B → output identical to B
+- Mixed: take email from B, keep status from A
+  for a specific row → verify cell values correct
+
+Edge cases:
+- Selection for non-existent key → graceful, skip
+- Selection for non-existent column → AppError::MissingColumn
+- Empty selections → output identical to File A
+- New row in B not in A → appears in output
+- Row in A not in B → kept in output
+- No primary key → AppError::Parse
+
+Correctness test:
+Given:
+  File A: id=1, name=Alice, email=old@co.com, status=active
+  File B: id=1, name=Alice, email=new@co.com, status=inactive
+
+Selections:
+  Take email from B for id=1
+  Keep status from A for id=1
+
+Expected output row:
+  id=1, name=Alice, email=new@co.com, status=active
+
+This test proves cherry-pick works at cell level.
+
+Run cargo test — all previous 39 tests must still pass.
+New merge tests must all pass.
+Run cargo clippy. Zero warnings.
+Report total test count.
+
+
+
+Claude output 
+
+
+
+⏺ 51/51 tests pass. Zero clippy warnings.
+
+  ---
+  Implementation notes:
+
+  - cherry_pick_merge: validates primary keys exist and all FileB selection columns are present before mutating anything, then applies selections in a single
+  pass over the output rows. New-B rows appended in a second pass using a pre-built key map.
+  - find_row_by_key: linear scan; returns None gracefully if any key column is absent from the schema.
+  - build_key_map: O(n) pre-build used for both the selection loop (index_b) and the new-row append pass (index_a), avoiding repeated O(n) scans.
+  - rows_to_csv: uses has_headers(false) on the csv writer so the header is written explicitly as the first record — no double-header risk.
+  - 12 new merge tests covering all specified scenarios including the cell-level cherry-pick correctness proof.
