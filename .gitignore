@@ -16,3 +16,14 @@ apps/desktop/src-tauri/target/
 .idea/
 .vscode/
 *.swp
+
+# Build artifacts
+apps/web/dist/
+# wasm-pack generated outputs (re-built via npm run build:wasm)
+apps/web/src/wasm/diffgraft_core.js
+apps/web/src/wasm/diffgraft_core_bg.wasm
+apps/web/src/wasm/package.json
+
+# Wrangler
+.wrangler/
+
