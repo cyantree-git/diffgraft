@@ -1,0 +1,584 @@
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Current status:
+- Desktop app working end to end
+- SideBySideDiffTable.tsx exists with unified table layout
+- Navigation widget with F7/Shift+F7 working
+- 25/25 changes detected correctly on test corpus
+
+Task: Complete UI redesign from form-based workflow
+to workspace-based layout. This replaces the current
+App.tsx layout and SideBySideDiffTable.tsx entirely.
+
+---
+
+## OVERALL LAYOUT
+
+Full screen split workspace. No scrollbars on body.
+App takes exactly 100vh, nothing outside viewport.
+┌──────────────────────────────────────────────────────┐
+│  HEADER BAR (40px fixed)                             │
+│  [ⓘ] data_1.csv    +0 -0 ~25 475    data_2.csv [ⓘ]  │
+├─────────────────────┬────────────────────────────────┤
+│                     │                                │
+│   LEFT PANE         │   RIGHT PANE                   │
+│   (File A table)    │   (File B table)               │
+│                     │                                │
+│   fills remaining   │   fills remaining              │
+│   viewport height   │   viewport height              │
+│                     │                                │
+└─────────────────────┴────────────────────────────────┘
+[ ↑  Change 3 of 25  ↓ ]  ← floating, bottom centre
+
+When no files loaded — drop zone state:
+┌─────────────────────┬────────────────────────────────┐
+│                     │                                │
+│   Drop File A here  │   Drop File B here             │
+│   or click to open  │   or click to open             │
+│                     │                                │
+└─────────────────────┴────────────────────────────────┘
+
+---
+
+## COMPONENT STRUCTURE
+
+Create these new components:
+
+src/components/
+├── WorkspaceLayout.tsx      ← root layout, replaces App content
+├── HeaderBar.tsx            ← thin top bar with summary + ⓘ buttons
+├── SplitPane.tsx            ← left/right pane container + divider
+├── FilePane.tsx             ← single pane: drop zone OR table
+├── DropZone.tsx             ← empty state drop target
+├── DiffPaneTable.tsx        ← single-side diff table (left or right)
+├── DetailsPopup.tsx         ← popup for file info, primary key, schema
+└── FloatingNav.tsx          ← floating ↑ change X of Y ↓ widget
+
+Delete or archive:
+- SideBySideDiffTable.tsx (replaced)
+- Old form sections in App.tsx
+
+---
+
+## STATE MANAGEMENT
+
+Move all state to App.tsx or a context.
+Pass down via props.
+
+State shape:
+```typescript
+interface AppState {
+  // File data
+  fileA: CsvReadResult | null
+  fileB: CsvReadResult | null
+  fileAContent: string | null
+  fileBContent: string | null
+  fileAName: string | null
+  fileBName: string | null
+
+  // Diff config
+  primaryKeys: string[]        // auto-detected, changeable in popup
+  ignoreColumns: string[]      // changeable in popup
+
+  // Diff result
+  diffResult: DiffResult | null
+  isLoading: boolean
+  error: string | null
+
+  // Navigation
+  currentChangeIndex: number   // -1 = none selected
+
+  // UI state
+  showDetailsA: boolean
+  showDetailsB: boolean
+}
+```
+
+---
+
+## AUTO-DIFF TRIGGER
+
+Trigger diff automatically when BOTH fileA and fileB are set.
+Use useEffect:
+```typescript
+useEffect(() => {
+  if (fileA && fileB && fileAContent && fileBContent) {
+    runDiff()
+  }
+}, [fileA, fileB, primaryKeys, ignoreColumns])
+```
+
+runDiff() calls cmd_diff_csv with current config.
+Also runs when primaryKeys or ignoreColumns change
+(user changed settings in popup and re-runs).
+
+Auto-detect primary key on each file drop:
+When fileA loads → setPrimaryKeys(fileA.primaryKeyCandidates.slice(0,1))
+If fileB loads first → setPrimaryKeys(fileB.primaryKeyCandidates.slice(0,1))
+If both loaded → keep fileA's candidates as authoritative
+
+---
+
+## DROP ZONE COMPONENT
+
+DropZone.tsx props:
+```typescript
+{
+  side: 'A' | 'B'
+  onFileLoaded: (result: CsvReadResult, content: string, name: string) => void
+}
+```
+
+Behaviour:
+- Full pane is a drop target (entire left or right half)
+- Accept .csv files only
+- Also shows a "click to open" affordance
+- On drop or click → read file via FileReader → call onFileLoaded
+- Visual state: default, drag-over (highlight border), loading
+
+Styling:
+- Border: 2px dashed #334155
+- Background: #0f172a
+- On drag over: border colour #3b82f6, background rgba(59,130,246,0.05)
+- Centre content: icon + text
+- Icon: simple CSV/table icon (SVG, no external lib)
+- Text: "Drop File A here" / "Drop File B here"
+- Subtext: "or click to open"
+- Font: #64748b
+
+---
+
+## HEADER BAR
+
+HeaderBar.tsx props:
+```typescript
+{
+  fileAName: string | null
+  fileBName: string | null
+  summary: DiffSummary | null
+  onInfoA: () => void
+  onInfoB: () => void
+}
+```
+
+Layout (40px height, full width):
+[ⓘ] data_1.csv  |  +0  -0  ~25  475  |  data_2.csv [ⓘ]
+
+Left third:    ⓘ button + File A name (left aligned)
+Centre third:  summary counts (centred)
+               +X added (green) | -X deleted (red)
+               ~X modified (amber) | X unchanged (muted)
+               Hidden when no diff result yet
+Right third:   File B name + ⓘ button (right aligned)
+
+When no file loaded on a side:
+  Show "Drop a file" in muted text instead of filename
+
+Styling:
+  Background:  #1e293b
+  Border-bottom: 1px solid #334155
+  Font-size:   13px
+  Padding:     0 16px
+  ⓘ button:   small, 24px, rounded, #334155 background
+
+---
+
+## SPLIT PANE
+
+SplitPane.tsx props:
+```typescript
+{
+  left: React.ReactNode
+  right: React.ReactNode
+}
+```
+
+Layout:
+- Two flex children, each 50% width
+- Divider: 4px wide, #334155, not draggable in v1
+- Both panes: overflow hidden (scroll handled inside)
+- Height: 100% of parent (fills viewport below header)
+
+---
+
+## FILE PANE TABLE — DiffPaneTable.tsx
+
+This replaces the unified SideBySideDiffTable.
+Each pane gets its own DiffPaneTable instance.
+
+Props:
+```typescript
+{
+  side: 'A' | 'B'
+  schema: CsvSchema
+  rows: string[][]
+  diffResult: DiffResult
+  unifiedRows: UnifiedRow[]     // computed once, shared
+  currentChangeIndex: number
+  changeIndex: number[]         // indices of changed rows
+  scrollRef: React.RefObject<HTMLDivElement>  // for sync
+  onScroll: (scrollTop: number, scrollLeft: number) => void
+}
+```
+
+UnifiedRow type (same as before):
+```typescript
+type UnifiedRow = {
+  rowNumber: number
+  type: 'unchanged' | 'modified' | 'added' | 'deleted'
+  rowA: string[] | null
+  rowB: string[] | null
+  changedColumns: Set<string>
+}
+```
+
+Table structure:
+<div ref={scrollRef} className="pane-scroll-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Row</th>
+        {schema.columns.map(col => <th>{col.name}</th>)}
+      </tr>
+    </thead>
+    <tbody>
+      {unifiedRows.map((row, i) => renderRow(row, i))}
+    </tbody>
+  </table>
+</div>
+````
+Row rendering per side:
+For side='A':
+unchanged:  show rowA values, opacity 0.4
+modified:   show rowA values, amber background
+changed cells get red tint highlight
+deleted:    show rowA values, red background
+added:      show "—" in all cells, green background
+For side='B':
+unchanged:  show rowB values, opacity 0.4
+modified:   show rowB values, amber background
+changed cells get green tint highlight
+deleted:    show "—" in all cells, red background
+added:      show rowB values, green background
+Current change highlight:
+When unifiedRows[i] is the current change:
+Add outline: 2px solid rgba(255,255,255,0.6) on the <tr>
+Row number column:
+Show the 1-based row number
+Same on both sides (row numbers match)
+Width: 48px, text-align: right, muted colour
+Sticky header:
+thead position: sticky, top: 0
+Background: #1e293b
+z-index: 10
+
+SCROLL SYNCHRONISATION
+This is the critical implementation detail.
+Both panes must scroll together — vertical AND horizontal.
+In SplitPane.tsx or WorkspaceLayout.tsx:
+typescriptconst scrollRefA = useRef<HTMLDivElement>(null)
+const scrollRefB = useRef<HTMLDivElement>(null)
+const isSyncingRef = useRef(false)
+
+function handleScrollA(e: Event) {
+  if (isSyncingRef.current) return
+  isSyncingRef.current = true
+  const el = e.target as HTMLDivElement
+  if (scrollRefB.current) {
+    scrollRefB.current.scrollTop = el.scrollTop
+    scrollRefB.current.scrollLeft = el.scrollLeft
+  }
+  requestAnimationFrame(() => {
+    isSyncingRef.current = false
+  })
+}
+
+function handleScrollB(e: Event) {
+  if (isSyncingRef.current) return
+  isSyncingRef.current = true
+  const el = e.target as HTMLDivElement
+  if (scrollRefA.current) {
+    scrollRefA.current.scrollTop = el.scrollTop
+    scrollRefA.current.scrollLeft = el.scrollLeft
+  }
+  requestAnimationFrame(() => {
+    isSyncingRef.current = false
+  })
+}
+
+useEffect(() => {
+  const a = scrollRefA.current
+  const b = scrollRefB.current
+  if (!a || !b) return
+  a.addEventListener('scroll', handleScrollA, { passive: true })
+  b.addEventListener('scroll', handleScrollB, { passive: true })
+  return () => {
+    a.removeEventListener('scroll', handleScrollA)
+    b.removeEventListener('scroll', handleScrollB)
+  }
+}, [diffResult])
+isSyncingRef prevents the feedback loop.
+requestAnimationFrame releases the lock after the
+browser completes the programmatic scroll.
+passive: true improves scroll performance.
+Scroll container styling:
+css.pane-scroll-container {
+  overflow: auto;
+  height: 100%;
+  width: 100%;
+}
+Both containers must have identical dimensions for
+scroll sync to feel natural.
+
+DETAILS POPUP
+DetailsPopup.tsx props:
+typescript{
+  side: 'A' | 'B'
+  file: CsvReadResult
+  fileName: string
+  primaryKeys: string[]
+  ignoreColumns: string[]
+  schemaDiff: SchemaDiff | null
+  onPrimaryKeysChange: (keys: string[]) => void
+  onIgnoreColumnsChange: (cols: string[]) => void
+  onRerunDiff: () => void
+  onClose: () => void
+}
+Popup layout (slides in from left for A, right for B):
+Or renders as a modal overlay — simpler for v1.
+Sections:
+
+File info:
+filename, row count, column count
+Primary key:
+Checkbox list of all columns
+Pre-check auto-detected candidates
+Blue dot next to auto-detected candidates
+Multi-select: user can check multiple for composite key
+Label: "Primary key columns"
+Note: "Leave empty to diff by row order"
+Ignore columns:
+Checkbox list of all columns
+Pre-check auto-detected noise columns
+Orange dot next to auto-detected noise columns
+Label: "Ignore these columns"
+Schema diff (if diffResult exists):
+Common columns: count
+Added columns: list in green
+Removed columns: list in red
+Re-run Diff button:
+Only enabled if primary keys or ignore columns changed
+Calls onRerunDiff → triggers useEffect → reruns diff
+
+Close button: X top right corner
+Backdrop: semi-transparent overlay, click to close
+
+FLOATING NAV
+FloatingNav.tsx props:
+typescript{
+  currentChangeIndex: number
+  totalChanges: number
+  onNext: () => void
+  onPrev: () => void
+}
+Position: fixed, bottom: 24px, left: 50%, transform: translateX(-50%)
+Only render when totalChanges > 0
+Styling (same as before):
+Background: #1e293b
+Border: 1px solid #334155
+Border-radius: 8px
+Padding: 8px 16px
+Box-shadow: 0 4px 12px rgba(0,0,0,0.4)
+Layout: [ ↑ ] [ Change X of Y ] [ ↓ ]
+Keyboard: F7 next, Shift+F7 prev, Alt+Down, Alt+Up
+
+UNIFIED ROW COMPUTATION
+Compute unifiedRows once in App.tsx or WorkspaceLayout.tsx
+when diffResult changes. Pass to both DiffPaneTable instances.
+typescriptconst unifiedRows = useMemo(() => {
+  if (!diffResult || !fileA || !fileB) return []
+  return buildUnifiedRows(diffResult, fileA.rows, fileB.rows, fileA.schema)
+}, [diffResult, fileA, fileB])
+
+const changeIndex = useMemo(() =>
+  unifiedRows
+    .map((row, i) => ({ row, i }))
+    .filter(({ row }) => row.type !== 'unchanged')
+    .map(({ i }) => i),
+  [unifiedRows]
+)
+buildUnifiedRows function:
+
+Walk all rows from both files
+Use diffResult to classify each row
+Build UnifiedRow objects with correct rowA/rowB/changedColumns
+Sort by row number
+
+
+NAVIGATION — SCROLL INTO VIEW
+Navigation scrolls BOTH panes to the target row.
+In WorkspaceLayout or App:
+typescriptconst rowRefsA = useRef<(HTMLTableRowElement | null)[]>([])
+const rowRefsB = useRef<(HTMLTableRowElement | null)[]>([])
+
+function navigateTo(pos: number) {
+  setCurrentChangeIndex(pos)
+  const targetRow = changeIndex[pos]
+  rowRefsA.current[targetRow]?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+  })
+  // scrollRefB will sync via scroll listener automatically
+  // no need to scroll B explicitly
+}
+Scroll B syncs automatically via the scroll listener.
+Only need to scroll A explicitly.
+
+GLOBAL STYLES
+index.css or App.css:
+css*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont,
+               'Segoe UI', sans-serif;
+}
+
+.pane-scroll-container {
+  overflow: auto;
+  height: 100%;
+  width: 100%;
+  scroll-behavior: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+}
+
+th, td {
+  border: 1px solid #1e293b;
+  padding: 6px 12px;
+  white-space: nowrap;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+th {
+  background: #1e293b;
+  color: #94a3b8;
+  font-weight: 500;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.row-unchanged { opacity: 0.4; }
+.row-modified  { background: rgba(146, 64, 14, 0.3); }
+.row-added     { background: rgba(20, 83, 45, 0.4); }
+.row-deleted   { background: rgba(127, 29, 29, 0.4); }
+
+.cell-changed-a { background: rgba(239, 68, 68, 0.4); }
+.cell-changed-b { background: rgba(34, 197, 94, 0.4); }
+
+.row-current-change {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: -2px;
+}
+
+.placeholder-cell {
+  color: #334155;
+  text-align: center;
+}
+
+FILES TO CREATE
+src/components/WorkspaceLayout.tsx   ← new
+src/components/HeaderBar.tsx         ← new
+src/components/SplitPane.tsx         ← new
+src/components/FilePane.tsx          ← new
+src/components/DropZone.tsx          ← new
+src/components/DiffPaneTable.tsx     ← new (replaces unified table)
+src/components/DetailsPopup.tsx      ← new
+src/components/FloatingNav.tsx       ← new (replaces inline nav)
+FILES TO UPDATE
+src/App.tsx                          ← use WorkspaceLayout
+src/index.css                        ← global styles above
+FILES TO DELETE
+src/components/SideBySideDiffTable.tsx
+src/components/SchemaDiff.tsx
+src/components/PrimaryKeySelector.tsx
+(these move into DetailsPopup)
+
+DO NOT MODIFY
+
+diffgraft-core (no Rust changes)
+Tauri commands in main.rs
+TypeScript types in types/diffgraft.ts
+Any existing tests
+
+
+VERIFICATION
+Run npm run tauri dev
+Test with data_1.csv and data_2.csv:
+
+App opens — two empty panes with drop zones visible
+Drop data_1.csv on LEFT pane:
+
+File loads, table appears immediately
+Header shows "data_1.csv" on left
+No diff yet (right pane still empty)
+
+
+Drop data_2.csv on RIGHT pane:
+
+Diff runs automatically
+Both tables render with 500 rows
+Header shows "+0 -0 ~25 475"
+FloatingNav shows "25 changes"
+
+
+Scroll left pane vertically → right pane scrolls in sync
+Scroll right pane horizontally → left pane scrolls in sync
+Press F7 → jumps to first change on both panes
+Both panes show same row centred
+Press ⓘ on left → DetailsPopup opens
+
+Shows filename, row count, column count
+Primary key selector with employee_id pre-checked
+Schema diff section
+
+
+Change primary key to full_name → Re-run Diff
+
+Diff updates in place
+Different results visible
+
+
+Try dropping files in reverse order:
+
+Drop data_2.csv on right first
+Drop data_1.csv on left second
+Diff still runs correctly
+
+
+
+Report:
+
+Whether scroll sync works (vertical + horizontal)
+Whether auto-diff triggers correctly
+Whether details popup opens and re-run works
+Any performance issues with 500 rows
+Any scroll feedback loop issues
+
+
+---
+
+This is the biggest prompt in the project so far. Give Claude Code time — probably 20-30 minutes. The scroll sync implementation is the most delicate part. If it comes back with scroll feedback loops, the fix is always in the `isSyncingRef` logic.
