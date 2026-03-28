@@ -3,6 +3,7 @@ pub mod error;
 pub mod export;
 pub mod merge;
 pub mod reader;
+pub mod wasm;
 
 pub use error::AppError;
 

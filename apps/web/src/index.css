@@ -1,0 +1,111 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.pane-scroll-container {
+  overflow: auto;
+  height: 100%;
+  width: 100%;
+  scroll-behavior: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+}
+
+th, td {
+  border: 1px solid #1e293b;
+  padding: 4px 12px;
+  white-space: nowrap;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+th {
+  background: #1e293b;
+  color: #94a3b8;
+  font-weight: 500;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+tr.row-unchanged { opacity: 0.4; }
+tr.row-modified  { background: rgba(146, 64, 14, 0.3); }
+tr.row-added     { background: rgba(20, 83, 45, 0.4); }
+tr.row-deleted   { background: rgba(127, 29, 29, 0.4); }
+
+td.cell-changed-a { background: rgba(239, 68, 68, 0.4); }
+td.cell-changed-b { background: rgba(34, 197, 94, 0.4); }
+
+tr.row-current-change {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: -2px;
+}
+
+td.placeholder-cell {
+  color: #334155;
+  text-align: center;
+}
+
+button {
+  cursor: pointer;
+}
+
+.privacy-banner {
+  background: rgba(30, 41, 59, 0.8);
+  border-bottom: 1px solid #334155;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: #64748b;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  cursor: pointer;
+  border: 2px dashed #334155;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dropzone-over {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.dropzone-icon { margin-bottom: 16px; }
+
+.dropzone-text {
+  color: #64748b;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.dropzone-subtext {
+  color: #475569;
+  font-size: 13px;
+}
+
+.dropzone-error {
+  color: #f87171;
+  font-size: 12px;
+  margin-top: 8px;
+}

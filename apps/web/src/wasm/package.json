@@ -1,0 +1,13 @@
+{
+  "name": "diffgraft-core",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "diffgraft_core_bg.wasm",
+    "diffgraft_core.js"
+  ],
+  "main": "diffgraft_core.js",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
