@@ -1,0 +1,243 @@
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Current status:
+- diffgraft-core complete: 63/63 tests passing
+- Prompt 6 is currently running (Tauri commands + React wiring)
+- We identified a critical serialisation bug that must be fixed now
+
+Task: Fix serde camelCase serialisation across all structs.
+
+---
+
+Background — why this matters:
+
+Tauri passes data between Rust and TypeScript as JSON.
+Rust uses snake_case field names by convention.
+TypeScript/JavaScript uses camelCase by convention.
+
+Without #[serde(rename_all = "camelCase")]:
+
+  Rust struct field:     primary_keys
+  JSON produced:         {"primary_keys": [...]}
+  TypeScript receives:   result.primaryKeys → undefined
+                         result.primary_keys → correct
+
+This means every multi-word field silently fails on the
+TypeScript side. The app compiles and runs but data never
+flows correctly. This is one of the most common Rust+Tauri
+bugs and the hardest to debug because there are no errors —
+just undefined values.
+
+The fix is one annotation per struct. It must be applied
+to every public struct and enum that crosses the Tauri
+IPC boundary.
+
+---
+
+Step 1: Update crates/diffgraft-core/src/lib.rs
+
+Add #[serde(rename_all = "camelCase")] to every struct:
+
+- CsvReadResult
+- ColumnInfo
+- CsvSchema
+- DiffConfig
+- SchemaDiff
+- CellChange
+- ModifiedRow
+- DiffResult
+- MergeConfig
+- DiffSummary
+- MergeResult
+
+The annotation goes between #[derive(...)] and pub struct:
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StructName {
+    ...
+}
+
+Do NOT rename the Rust field names themselves.
+The annotation only affects JSON serialisation.
+Internal Rust code continues to use snake_case.
+
+---
+
+Step 2: Update crates/diffgraft-core/src/merge.rs
+
+Add #[serde(rename_all = "camelCase")] to:
+
+- CellSelection struct
+- MergeSource enum
+
+For the enum, camelCase affects variant names in JSON.
+MergeSource::FileA serialises as "fileA"
+MergeSource::FileB serialises as "fileB"
+
+Verify this matches what the TypeScript side will send.
+If TypeScript sends "FileA" (PascalCase) instead,
+use #[serde(rename_all = "PascalCase")] on the enum only.
+
+Check the existing TypeScript types in
+apps/desktop/src/types/diffgraft.ts to confirm
+what format TypeScript is using for MergeSource values.
+Match Rust serialisation to TypeScript expectation.
+
+---
+
+Step 3: Update apps/desktop/src/types/diffgraft.ts
+
+Verify every TypeScript interface uses camelCase field names.
+Fix any that use snake_case.
+
+Expected camelCase fields:
+CsvReadResult:
+  schema, rows, primaryKeyCandidates, noiseColumns
+
+CsvSchema:
+  columns, rowCount
+
+DiffConfig:
+  primaryKeys, ignoreColumns, caseSensitive
+
+SchemaDiff:
+  addedColumns, removedColumns, commonColumns
+
+CellChange:
+  column, valueA, valueB
+
+ModifiedRow:
+  keyValues, rowIndexA, rowIndexB, changes
+
+DiffResult:
+  schemaDiff, addedRows, deletedRows, modifiedRows,
+  totalRowsA, totalRowsB, autoIgnoredColumns
+
+MergeConfig:
+  primaryKeys, outputPath
+
+DiffSummary:
+  added, deleted, modified, unchanged, totalA, totalB,
+  hasSchemaChanges, schemaChangesCount
+
+MergeResult:
+  totalRows, rowsFromA, rowsFromB, outputCsv
+
+MergeSource enum values: "fileA" | "fileB"
+  (matches camelCase serialisation of Rust enum variants)
+
+---
+
+Step 4: Update apps/desktop/src/lib/diffgraft.ts
+
+If this file exists, verify all invoke() calls pass
+arguments with camelCase keys matching TypeScript types.
+
+Tauri invoke() serialises the args object as JSON.
+The keys must match what Rust expects after deserialisation.
+
+With rename_all = "camelCase" on Rust structs,
+Rust now expects camelCase keys in incoming JSON too.
+
+Example:
+// WRONG — Rust will not deserialise this correctly
+invoke('cmd_diff_csv', {
+  rows_a: ...,
+  schema_a: ...,
+})
+
+// CORRECT — matches rename_all = "camelCase"
+invoke('cmd_diff_csv', {
+  rowsA: ...,
+  schemaA: ...,
+})
+
+Fix any snake_case keys in invoke() calls.
+
+---
+
+Step 5: Verify tests still pass
+
+The rename_all annotation only affects JSON serialisation.
+It does not change Rust field names.
+All existing unit tests use Rust field names directly
+and must continue to pass unchanged.
+
+Run: cargo test
+Expected: 63/63 tests pass
+
+Run: cargo check
+Expected: zero errors, zero warnings
+
+Run: cargo clippy
+Expected: zero warnings
+
+---
+
+Step 6: Add a comment to lib.rs explaining the decision
+
+At the top of lib.rs, after the module declarations,
+add this comment block:
+
+// Serialisation note:
+// All public structs use #[serde(rename_all = "camelCase")]
+// to ensure clean interop with TypeScript across the Tauri
+// IPC boundary. Rust field names remain snake_case internally.
+// JSON produced by Tauri uses camelCase matching TypeScript
+// conventions. This is a project-wide convention — all new
+// structs crossing the IPC boundary must follow it.
+
+---
+
+Report when complete:
+- List every struct/enum updated
+- Confirm 63/63 tests still pass
+- Confirm cargo check clean
+- Confirm TypeScript types updated
+- Note any MergeSource enum decision made
+  (camelCase vs PascalCase for variant names)
+
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+Claude Reply 
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+
+
+---
+  Complete. Here's the report:
+
+  Structs/enums updated with #[serde(rename_all = "camelCase")]:
+  - lib.rs: CsvReadResult, ColumnInfo, CsvSchema, DiffConfig,
+  SchemaDiff, CellChange, ModifiedRow, DiffResult, MergeConfig,
+  DiffSummary, MergeResult (11 structs)
+  - merge.rs: MergeSource enum, CellSelection struct
+
+  MergeSource enum decision: Used #[serde(rename_all = "camelCase")]
+  → variants serialize as "fileA" / "fileB". TypeScript type updated
+  to match: "fileA" | "fileB".
+
+  Tests: 63/63 passing. One test
+  (test_export_diff_json_contains_required_keys) was updated to
+  assert camelCase JSON keys ("addedRows" etc.) — the serialisation
+  change is the correct behaviour.
+
+  cargo check / clippy: Zero errors, zero warnings.
+
+  TypeScript types updated (types/diffgraft.ts): all snake_case
+  fields converted to camelCase throughout.
+
+  Components updated to use new camelCase field names: App.tsx,
+  SchemaDiff.tsx, DiffTable.tsx, PrimaryKeySelector.tsx,
+  FileDropzone.tsx.
+
+✻ Cogitated for 4m 14s
