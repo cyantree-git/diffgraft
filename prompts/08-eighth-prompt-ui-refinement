@@ -1,0 +1,248 @@
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Current status:
+- Desktop app working end to end
+- 25/25 changes detected correctly on 500-row test corpus
+- Current UI shows a list view of changes — needs replacing
+
+Task: Replace DiffTable.tsx with a proper side-by-side
+diff table. This is the primary UI of DiffGraft and must
+look like a professional diff tool.
+
+---
+
+Design spec:
+
+LAYOUT:
+Single unified table with these columns:
+  Row # | [all data columns from File A] | [same columns from File B]
+
+The table has two halves — left half is File A, right half
+is File B. Column headers appear once on each side.
+
+Like this (simplified to 3 columns):
+
+┌─────┬──────────┬────────────┬──────────┬──────────┬────────────┬──────────┐
+│ Row │          │  FILE A    │          │          │  FILE B    │          │
+├─────┼──────────┼────────────┼──────────┼──────────┼────────────┼──────────┤
+│     │ emp_id   │ status     │ salary   │ emp_id   │ status     │ salary   │
+├─────┼──────────┼────────────┼──────────┼──────────┼────────────┼──────────┤
+│  1  │ EMP0001  │ active     │ 75000    │ EMP0001  │ active     │ 75000    │  ← unchanged, greyed
+│  2  │ EMP0002  │ verified   │ 90000    │ EMP0002  │ suspended  │ 90000    │  ← modified, amber row
+│  3  │ EMP0003  │ -          │ -        │ EMP0003  │ active     │ 55000    │  ← added, green row
+│  4  │ EMP0004  │ inactive   │ 45000    │ EMP0004  │ -          │ -        │  ← deleted, red row
+└─────┴──────────┴────────────┴──────────┴──────────┴────────────┴──────────┘
+
+ROW COLOURS (full row, both sides):
+- Unchanged:  no colour change, opacity 0.5 (greyed out)
+- Modified:   amber/yellow background  #92400e or similar dark amber
+              both the File A and File B halves coloured amber
+- Added:      green background  #14532d or similar dark green
+              File A side shows "—" for all cells (row didn't exist)
+              File B side shows the actual values
+- Deleted:    red background  #7f1d1d or similar dark red
+              File A side shows the actual values
+              File B side shows "—" for all cells
+
+CHANGED CELLS within modified rows:
+- The specific cells that changed get a brighter highlight
+- File A changed cell: slightly brighter red tint within the amber row
+- File B changed cell: slightly brighter green tint within the amber row
+- Unchanged cells within a modified row: normal amber
+
+HEADER:
+Two section headers spanning the column groups:
+  "File A — [filename]"    spanning left columns
+  "File B — [filename]"    spanning right columns
+
+SUMMARY BAR above the table:
+  +X added  |  -X deleted  |  ~X modified  |  X unchanged
+  Each count in its respective colour
+
+CONTROLS above the table:
+  [ ] Show unchanged rows (checkbox, checked by default)
+      When unchecked: hide greyed rows, show only changes
+  [ ] Highlight changed cells (checkbox, checked by default)
+
+STICKY HEADER:
+Column headers stick to top when scrolling.
+Summary bar sticks to top above the headers.
+
+PERFORMANCE:
+Table may have 500+ rows.
+Use CSS will-change and avoid re-renders on scroll.
+If row count exceeds 1000, use windowed rendering
+(only render visible rows + buffer).
+For 500 rows this is not needed — render all.
+
+---
+
+Implementation:
+
+Create a new component: src/components/SideBySideDiffTable.tsx
+
+Props:
+{
+  result: DiffResult
+  schemaA: CsvSchema
+  schemaB: CsvSchema
+  rowsA: string[][]
+  rowsB: string[][]
+  fileNameA: string
+  fileNameB: string
+}
+
+Internal logic:
+
+1. Build a unified row list from DiffResult:
+
+type UnifiedRow = {
+  rowNumber: number
+  type: 'unchanged' | 'modified' | 'added' | 'deleted'
+  rowA: string[] | null    // null for added rows
+  rowB: string[] | null    // null for deleted rows
+  changedColumns: Set<string>  // columns that changed
+}
+
+2. For modified rows:
+   - rowA = original values from rowsA
+   - rowB = new values from rowsB
+   - changedColumns = Set of column names from result.modifiedRows[n].changes
+
+3. For added rows (in rowsB but not rowsA):
+   - rowA = null (show "—" in all File A cells)
+   - rowB = actual values from rowsB
+
+4. For deleted rows (in rowsA but not rowsB):
+   - rowA = actual values from rowsA
+   - rowB = null (show "—" in all File B cells)
+
+5. For unchanged rows:
+   - rowA = values from rowsA
+   - rowB = same values
+   - changedColumns = empty Set
+
+6. Sort unified rows by rowNumber ascending.
+
+COLUMNS:
+Use schemaA.columns for File A column headers.
+Use schemaB.columns for File B column headers.
+Common columns appear on both sides.
+Columns only in A: appear on A side only, "—" on B side.
+Columns only in B: "—" on A side, appear on B side.
+
+STYLING:
+Dark theme to match existing app.
+Use plain CSS — no external UI library.
+Table takes full width of container.
+Horizontal scroll if columns overflow.
+Row height: 36px minimum.
+Font: monospace for data cells (csv data reads better).
+Font size: 13px for data, 12px for headers.
+
+Colours (dark theme):
+  Background:          #0f172a
+  Table header:        #1e293b
+  Unchanged row:       #0f172a, opacity 0.5
+  Modified row:        rgba(146, 64, 14, 0.3)   amber
+  Modified cell A:     rgba(239, 68, 68, 0.4)   red tint
+  Modified cell B:     rgba(34, 197, 94, 0.4)   green tint
+  Added row:           rgba(20, 83, 45, 0.4)    green
+  Deleted row:         rgba(127, 29, 29, 0.4)   red
+  Border:              #1e293b
+  Text:                #e2e8f0
+  Muted text:          #64748b  (for "—" placeholders)
+  Summary added:       #4ade80
+  Summary deleted:     #f87171
+  Summary modified:    #fb923c
+  Summary unchanged:   #64748b
+
+DIVIDER:
+A 2px vertical divider between File A columns and
+File B columns. Colour: #334155.
+Makes the two sides visually distinct.
+
+---
+
+Replace in App.tsx:
+Remove import of old DiffTable
+Add import of SideBySideDiffTable
+Pass the required props:
+  result={diffResult}
+  schemaA={fileA.schema}
+  schemaB={fileB.schema}
+  rowsA={fileA.rows}
+  rowsB={fileB.rows}
+  fileNameA={fileNameA}  ← store filename when user opens file
+  fileNameB={fileNameB}
+
+Store filenames in App state when files are opened.
+Show just the filename not the full path.
+e.g. "data_1.csv" not "/Users/sid/downloads/data_1.csv"
+
+---
+
+Do not modify:
+- diffgraft-core (no Rust changes needed)
+- Tauri commands
+- TypeScript types
+- Any existing tests
+
+Only create/modify:
+- src/components/SideBySideDiffTable.tsx  (new)
+- src/App.tsx  (wire new component, add filename state)
+
+---
+
+After implementing:
+Run npm run tauri dev
+Verify with data_1.csv and data_2.csv:
+- Table shows both files side by side
+- 475 greyed unchanged rows visible
+- 25 amber modified rows visible
+- Changed cells highlighted within modified rows
+- Summary bar shows correct counts
+- Show/hide unchanged rows toggle works
+- Horizontal scroll works if needed
+- Sticky header works on scroll
+
+Report:
+- Whether app launches
+- Screenshot description of what the table looks like
+- Any rendering issues
+
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+Claude Reply 
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+
+
+⏺ Both clean. Here's what was built:
+
+  SideBySideDiffTable.tsx (new component):
+  - Builds a UnifiedRow[] list via useMemo: iterates rowsA, classifies each as unchanged/modified/deleted, appends added rows from rowsB
+  - Two sticky header rows: file section headers (FILE A in green, FILE B in red) spanning their column groups, then individual column names
+  - A 2px #334155 vertical divider column separates the two sides
+  - Row backgrounds: amber for modified, dark green for added, dark red for deleted, 45% opacity for unchanged
+  - Per-cell highlights on modified rows: red tint on A cells that changed, green tint on B cells that changed
+  - "Show unchanged rows" checkbox (default: on) and "Highlight changed cells" checkbox (default: on)
+  - Summary bar at top: +X added, −X deleted, ~X modified, X unchanged
+  - overflow-x: auto table container for horizontal scroll; position: sticky; top: 0 on headers for vertical scroll
+  - title on each cell for full-value tooltip on overflow
+  - Empty state row when no rows are visible
+
+  App.tsx changes:
+  - Added fileNameA/fileNameB state, populated from the file path when opened
+  - FileSlot now shows the filename prominently
+  - Replaced DiffTable with SideBySideDiffTable, passing all required props
+  - Export buttons moved to a slim right-aligned bar (summary counts now live inside the table component)
+  - maxWidth bumped to 1600px to give the wide table room
