@@ -1,0 +1,60 @@
+```
+
+Then test this exact sequence and report back what you see:
+
+---
+
+## Test Sequence
+
+**Test 1 — Basic load:**
+```
+==> Drag and drop is not working. We can check it later why. But we can open a file using file explorer.
+Drop data_1.csv on left pane
+→ Does the table appear immediately? ==> Yes, after opening through file picker in the explorere.
+→ Does header show "data_1.csv"? ==> yes
+
+
+
+```
+
+**Test 2 — Auto-diff:**
+```
+Drop data_2.csv on right pane ==> opened using file explorer.
+→ Does diff run automatically? ==> Yes
+→ Does header show "+0 -0 ~25 475"? ==> Yes
+→ Do both tables show 500 rows? ==> Yes
+```
+
+**Test 3 — Scroll sync:**
+```
+Scroll left pane down → does right pane follow? ==> Yes
+Scroll right pane horizontally → does left pane follow? ==> Yes
+Any feedback loop (jittery scrolling)? ==> Yes scrolling feels jittery. 
+```
+
+**Test 4 — Navigation:**
+This is where there are some major bugs
+```
+Press F7 → does it jump to first change? => It jumps but the left pane and right pane look out of sync. 
+Press F7 again → second change? ==> This is where it completely feels like out of sync. What left pane is showing is not in sync with right pane.
+Press Shift+F7 → goes back?
+Does the row centre in viewport on both panes?
+
+This is a major buggy areay.
+```
+
+**Test 5 — Details popup:**
+```
+Click ⓘ on left → popup opens? Yes
+Is employee_id pre-checked as primary key? Yes
+Change primary key → click Re-run → diff updates? Haven't checked. Will check in the future. 
+```
+
+**Test 6 — Reverse drop order:**
+
+```
+Close and reopen
+Drop data_2.csv on RIGHT first
+Drop data_1.csv on LEFT second
+Diff still correct — 25 changes?
+`

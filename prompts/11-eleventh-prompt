@@ -1,0 +1,219 @@
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Current status:
+- Workspace layout working
+- Auto-diff working correctly (25/25 changes)
+- Scroll sync working but jittery
+- Navigation (F7) broken — panes go out of sync on navigation
+
+Three bugs to fix. Fix in this order.
+
+---
+
+BUG 1 — CRITICAL: Navigation scroll sync broken
+
+Problem:
+When F7 is pressed, pane A scrolls to the target row
+via rowRefsA[target].scrollIntoView().
+Pane B is supposed to sync via the scroll listener.
+But scrollIntoView() on a <tr> element does not
+reliably trigger the scroll event on the parent
+scroll container. Pane B gets wrong or no scroll.
+
+Fix:
+Do NOT use scrollIntoView() for navigation.
+Instead, calculate the target scrollTop manually
+and set it directly on BOTH scroll containers.
+
+Replace the navigation scroll logic with:
+```typescript
+function scrollToRow(rowIndex: number) {
+  const ROW_HEIGHT = 37 // px — must match actual tr height
+  const containerHeight = scrollRefA.current?.clientHeight ?? 0
+  
+  // Calculate scrollTop that centres the target row
+  const targetScrollTop = Math.max(
+    0,
+    (rowIndex * ROW_HEIGHT) - (containerHeight / 2) + (ROW_HEIGHT / 2)
+  )
+  
+  // Set both containers directly — no listener needed
+  isSyncingRef.current = true
+  
+  if (scrollRefA.current) {
+    scrollRefA.current.scrollTop = targetScrollTop
+  }
+  if (scrollRefB.current) {
+    scrollRefB.current.scrollTop = targetScrollTop
+  }
+  
+  requestAnimationFrame(() => {
+    isSyncingRef.current = false
+  })
+}
+```
+
+Call scrollToRow(changeIndex[pos]) from navigateTo()
+instead of rowRef.scrollIntoView().
+
+ROW_HEIGHT must match the actual rendered row height.
+Measure it: open browser devtools, inspect a <tr>,
+check its offsetHeight. Typical value is 36-40px.
+Use the actual value, not an estimate.
+
+After this fix, both panes scroll to identical
+scrollTop on every navigation press.
+They cannot go out of sync because both are set
+to the same value in the same synchronous call.
+
+Also remove rowRefsA and rowRefsB entirely —
+they are no longer needed.
+
+---
+
+BUG 2 — MEDIUM: Jittery scroll sync
+
+Problem:
+requestAnimationFrame releases the sync lock
+too early. The programmatic scroll on pane B
+triggers another scroll event before the frame
+completes, causing micro-feedback loops.
+
+Fix:
+Replace requestAnimationFrame with a longer
+debounce using setTimeout:
+```typescript
+let syncTimeout: ReturnType<typeof setTimeout> | null = null
+
+function handleScrollA(e: Event) {
+  if (isSyncingRef.current) return
+  isSyncingRef.current = true
+  
+  const el = e.target as HTMLDivElement
+  if (scrollRefB.current) {
+    scrollRefB.current.scrollTop = el.scrollTop
+    scrollRefB.current.scrollLeft = el.scrollLeft
+  }
+  
+  if (syncTimeout) clearTimeout(syncTimeout)
+  syncTimeout = setTimeout(() => {
+    isSyncingRef.current = false
+    syncTimeout = null
+  }, 50)
+}
+
+// Same pattern for handleScrollB
+```
+
+50ms is enough time for the programmatic scroll
+to complete and its event to fire and be ignored.
+After 50ms the lock releases cleanly.
+
+---
+
+BUG 3 — MEDIUM: Drag and drop not working
+
+Problem:
+Tauri v2 requires explicit file drop permissions
+in tauri.conf.json. Without this, the drag and
+drop events are intercepted by Tauri's webview
+and never reach the React drop handlers.
+
+Fix:
+
+1. In tauri.conf.json add to the app > windows array:
+```json
+{
+  "fileDropEnabled": true
+}
+```
+
+Or in Tauri v2 format:
+```json
+{
+  "app": {
+    "windows": [
+      {
+        "fileDropEnabled": true,
+        "title": "DiffGraft",
+        ...existing window config...
+      }
+    ]
+  }
+}
+```
+
+2. In DropZone.tsx, the drag and drop handlers
+need to handle both:
+  a) HTML5 drag and drop (e.dataTransfer.files)
+  b) Tauri file drop events
+
+For Tauri file drop, use the Tauri event API:
+```typescript
+import { listen } from '@tauri-apps/api/event'
+
+useEffect(() => {
+  const unlisten = listen('tauri://file-drop', (event) => {
+    const paths = event.payload as string[]
+    const csvPaths = paths.filter(p => p.endsWith('.csv'))
+    if (csvPaths.length > 0) {
+      handleFilePath(csvPaths[0])
+    }
+  })
+  return () => { unlisten.then(fn => fn()) }
+}, [])
+```
+
+Problem with this approach: the tauri://file-drop
+event fires globally, not per-pane. Both panes
+would receive every drop.
+
+Better approach for v1: detect which pane the
+drop landed on using the dragenter/dragleave
+events to track hover state, then on
+tauri://file-drop use that hover state to
+determine which pane gets the file.
+
+OR — simplest fix for v1:
+If only one pane is empty, always send dropped
+file to the empty pane.
+If both are empty, first drop goes to left pane,
+second drop goes to right pane.
+Add a dropOrder ref to track this.
+
+Implement whichever approach is cleaner.
+Drag and drop is nice to have — the file picker
+works correctly. Prioritise bugs 1 and 2.
+
+---
+
+After fixing all three:
+
+Run npm run tauri dev
+Test sequence:
+
+Navigation test (bug 1):
+1. Open data_1.csv and data_2.csv
+2. Press F7 → both panes show same row centred
+3. Press F7 again → both panes advance together
+4. Press F7 10 times rapidly → panes stay in sync
+5. Press Shift+F7 → both panes go back together
+6. Both panes must show identical scrollTop at all times
+
+Scroll test (bug 2):
+1. Scroll left pane slowly → right follows smoothly
+2. Scroll right pane → left follows smoothly
+3. Scroll rapidly up and down → no jitter
+4. No feedback loop visible
+
+Drag and drop test (bug 3):
+1. Drag data_1.csv onto left pane → file loads
+2. Drag data_2.csv onto right pane → diff runs
+3. If tauri file-drop is too complex, document
+   that file picker works and drop is v1.1
+
+Report:
+- Navigation: do both panes scroll to same position?
+- Scroll: is jitter gone?
+- Drag and drop: working or deferred to v1.1?
+- Actual measured ROW_HEIGHT used
