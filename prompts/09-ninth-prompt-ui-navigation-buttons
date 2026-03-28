@@ -1,0 +1,291 @@
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Current status:
+- SideBySideDiffTable.tsx implemented
+- Side by side diff view working with 500 row test corpus
+- 25 modified rows visible, unchanged rows greyed out
+
+Task: Add IntelliJ-style change navigation to
+SideBySideDiffTable.tsx
+
+---
+
+Design spec:
+
+NAVIGATION CONTROLS:
+A fixed navigation widget — always visible, does not scroll.
+Position: top right corner of the diff table container.
+
+Widget layout:
+┌─────────────────────────────┐
+│  ↑  Change 3 of 25  ↓      │
+└─────────────────────────────┘
+
+- Up arrow button:    jump to previous change
+- Down arrow button:  jump to next change
+- Counter text:       "Change X of Y"
+                      X = current change (1-based)
+                      Y = total changes (added + deleted + modified)
+- Keyboard shortcuts: [ and ] or Alt+Up / Alt+Down
+                      whichever feels natural
+
+BEHAVIOUR:
+- On first load: no change selected, counter shows "25 changes"
+- First press of ↓: jumps to first change, counter shows "Change 1 of 25"
+- Subsequent ↓: jumps to next change in document order
+- At last change: ↓ wraps to first change
+- First press of ↑: jumps to last change (wrap from top)
+- At first change: ↑ wraps to last change
+- "Jump" means: scroll the row into view, centred vertically
+  Use element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+CURRENT CHANGE HIGHLIGHT:
+The currently selected change row gets an extra visual indicator
+on top of its existing colour (amber/green/red):
+- A 3px left border in bright white or bright accent colour
+- Or a subtle box-shadow: inset 0 0 0 2px rgba(255,255,255,0.4)
+This makes it obvious which change you're currently viewing.
+Unchanged rows are never selected by navigation.
+
+CHANGE INDEX:
+Build a changeIndex array when DiffResult is received:
+const changeIndex = unifiedRows
+  .map((row, i) => ({ row, i }))
+  .filter(({ row }) => row.type !== 'unchanged')
+  .map(({ i }) => i)
+
+Navigation moves through changeIndex positions.
+Each entry points to the array index of a changed row.
+
+ROW REFS:
+Assign a React ref to each changed row's <tr> element.
+Use an array of refs: rowRefs[i] = useRef<HTMLTableRowElement>
+
+On navigation:
+  const targetIndex = changeIndex[currentChangePos]
+  rowRefs[targetIndex].current?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center'
+  })
+
+WIDGET STYLING (dark theme, matches existing):
+  Background:     #1e293b
+  Border:         #334155
+  Border-radius:  6px
+  Padding:        6px 12px
+  Position:       sticky top, float right above table
+                  OR fixed in top-right of table container
+
+Button styling:
+  Background:     transparent
+  Color:          #e2e8f0
+  Border:         1px solid #334155
+  Border-radius:  4px
+  Width:          28px
+  Height:         28px
+  Font-size:      14px
+  Hover:          background #334155
+  Disabled:       opacity 0.3 (when 0 changes exist)
+
+Counter text:
+  Color:          #94a3b8
+  Font-size:      13px
+  Min-width:      120px
+  Text-align:     center
+
+---
+
+Keyboard shortcuts:
+Add a useEffect in SideBySideDiffTable.tsx:
+
+useEffect(() => {
+  const handler = (e: KeyboardEvent) => {
+    if (e.key === 'F7' || (e.altKey && e.key === 'ArrowDown')) {
+      e.preventDefault()
+      navigateNext()
+    }
+    if (e.key === 'F7' && e.shiftKey ||
+        (e.altKey && e.key === 'ArrowUp')) {
+      e.preventDefault()
+      navigatePrev()
+    }
+  }
+  window.addEventListener('keydown', handler)
+  return () => window.removeEventListener('keydown', handler)
+}, [currentChangePos, changeIndex])
+
+F7 = next change (matches IntelliJ exactly)
+Shift+F7 = previous change (matches IntelliJ exactly)
+Alt+Down / Alt+Up = alternative for non-Mac users
+
+---
+
+State to add to SideBySideDiffTable.tsx:
+  const [currentChangePos, setCurrentChangePos] = useState(-1)
+  // -1 means no change selected yet
+
+  const changeIndex = useMemo(() =>
+    unifiedRows
+      .map((row, i) => ({ row, i }))
+      .filter(({ row }) => row.type !== 'unchanged')
+      .map(({ i }) => i),
+    [unifiedRows]
+  )
+
+  const rowRefs = useRef<(HTMLTableRowElement | null)[]>([])
+
+  function navigateNext() {
+    if (changeIndex.length === 0) return
+    const next = (currentChangePos + 1) % changeIndex.length
+    setCurrentChangePos(next)
+    rowRefs.current[changeIndex[next]]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    })
+  }
+
+  function navigatePrev() {
+    if (changeIndex.length === 0) return
+    const prev = currentChangePos <= 0
+      ? changeIndex.length - 1
+      : currentChangePos - 1
+    setCurrentChangePos(prev)
+    rowRefs.current[changeIndex[prev]]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    })
+  }
+
+---
+
+Navigation widget JSX (render above or sticky over table):
+
+<div className="nav-widget">
+  <button
+    onClick={navigatePrev}
+    disabled={changeIndex.length === 0}
+    title="Previous change (Shift+F7)"
+    aria-label="Previous change"
+  >
+    ↑
+  </button>
+
+  <span className="nav-counter">
+    {currentChangePos === -1
+      ? `${changeIndex.length} changes`
+      : `Change ${currentChangePos + 1} of ${changeIndex.length}`
+    }
+  </span>
+
+  <button
+    onClick={navigateNext}
+    disabled={changeIndex.length === 0}
+    title="Next change (F7)"
+    aria-label="Next change"
+  >
+    ↓
+  </button>
+</div>
+
+---
+
+Current change highlight in table row:
+When rendering each <tr>, check if it is the current change:
+
+const isCurrentChange =
+  currentChangePos !== -1 &&
+  changeIndex[currentChangePos] === rowIndex
+
+Apply to <tr>:
+  style={{
+    ...existingRowStyle,
+    boxShadow: isCurrentChange
+      ? 'inset 0 0 0 2px rgba(255,255,255,0.5)'
+      : undefined,
+    outline: isCurrentChange ? '2px solid #e2e8f0' : undefined,
+  }}
+
+---
+
+Reset navigation when new diff result arrives:
+Add useEffect in SideBySideDiffTable.tsx:
+
+useEffect(() => {
+  setCurrentChangePos(-1)
+}, [result])
+
+---
+
+Do not modify:
+- diffgraft-core
+- Tauri commands
+- TypeScript types
+- Any Rust code
+
+Only modify:
+- src/components/SideBySideDiffTable.tsx
+
+---
+
+After implementing:
+Run npm run tauri dev
+Test with data_1.csv and data_2.csv:
+
+1. Load both files, run diff
+2. Widget shows "25 changes" initially
+3. Press ↓ or F7 → jumps to first change,
+   shows "Change 1 of 25", row has white outline
+4. Press ↓ again → jumps to second change,
+   shows "Change 2 of 25"
+5. Press ↑ or Shift+F7 → goes back to first change
+6. Press ↑ from first → wraps to last (Change 25 of 25)
+7. Press ↓ from last → wraps to first (Change 1 of 25)
+8. Scroll is smooth, row centres in viewport
+9. Alt+Down / Alt+Up also work
+
+Report:
+- Whether navigation works correctly
+- Whether keyboard shortcuts work
+- Whether smooth scroll centres the row
+- Any issues with ref assignment on large tables
+
+
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+Claude Reply 
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+
+
+
+
+  State & refs:
+  - currentChangePos: number — -1 means no selection; 0-based index into changeIndex
+  - rowRefs: MutableRefObject<(HTMLTableRowElement | null)[]> — keyed by unified row index so refs remain correct regardless of whether unchanged rows are hidden
+
+  changeIndex memo — array of unified row indices for non-unchanged rows, rebuilt only when unifiedRows changes
+
+  visibleRows — now carries { row, unifiedIndex } so each rendered row knows its position in the unified array for ref assignment and highlight detection
+
+  navigateNext / navigatePrev — useCallback wrapped, wrap around at both ends, call scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  Keyboard shortcuts (registered via useEffect, cleaned up on unmount):
+  - F7 → next change
+  - Shift+F7 → previous change
+  - Alt+ArrowDown → next change
+  - Alt+ArrowUp → previous change
+
+  Reset effect — clears currentChangePos to -1 and wipes rowRefs whenever result changes (new diff run)
+
+  Navigation widget — sits in the summary bar at the far right: ↑ button | counter text | ↓ button. Counter shows "25 changes" initially, "Change X of 25" once navigation starts.
+  Buttons have hover highlight and are disabled (opacity 0.3) when no changes exist.
+
+  Current change highlight — outline: 2px solid rgba(255,255,255,0.55) with outlineOffset: -2px on the active <tr> — draws inside the row border without affecting layout.
