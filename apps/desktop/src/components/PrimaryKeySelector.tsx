@@ -1,31 +1,40 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import type { CsvSchema, DiffConfig } from "../types/diffgraft";
 
 interface Props {
   schema: CsvSchema;
+  /** Pre-detected primary key candidates — sourced from CsvReadResult. */
+  initialCandidates?: string[];
+  /** Pre-detected noise columns — sourced from CsvReadResult. */
+  initialNoise?: string[];
   onConfigured: (config: DiffConfig) => void;
   disabled?: boolean;
 }
 
-export function PrimaryKeySelector({ schema, onConfigured, disabled }: Props) {
-  const [candidates, setCandidates] = useState<string[]>([]);
-  const [noiseColumns, setNoiseColumns] = useState<string[]>([]);
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [ignoredColumns, setIgnoredColumns] = useState<Set<string>>(new Set());
+export function PrimaryKeySelector({
+  schema,
+  initialCandidates = [],
+  initialNoise = [],
+  onConfigured,
+  disabled,
+}: Props) {
+  const [candidates, setCandidates] = useState<string[]>(initialCandidates);
+  const [noiseColumns, setNoiseColumns] = useState<string[]>(initialNoise);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
+    new Set(initialCandidates)
+  );
+  const [ignoredColumns, setIgnoredColumns] = useState<Set<string>>(
+    new Set(initialNoise)
+  );
   const [noPrimaryKey, setNoPrimaryKey] = useState(false);
 
+  // Re-initialise whenever the file changes.
   useEffect(() => {
-    invoke<string[]>("cmd_detect_primary_key_candidates", { schema }).then(
-      (cols) => {
-        setCandidates(cols);
-        setSelectedKeys(new Set(cols));
-      }
-    );
-    invoke<string[]>("cmd_detect_noise_columns", { schema }).then((cols) => {
-      setNoiseColumns(cols);
-      setIgnoredColumns(new Set(cols));
-    });
+    setCandidates(initialCandidates);
+    setNoiseColumns(initialNoise);
+    setSelectedKeys(new Set(initialCandidates));
+    setIgnoredColumns(new Set(initialNoise));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schema]);
 
   function toggleKey(name: string) {

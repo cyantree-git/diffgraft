@@ -6,6 +6,41 @@ pub mod reader;
 
 pub use error::AppError;
 
+/// The result of opening a CSV file, bundling schema, rows, and auto-detected
+/// hints in one struct so the frontend needs only a single round-trip.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CsvReadResult {
+    /// The inferred schema (columns + row count).
+    pub schema: CsvSchema,
+    /// All data rows as raw strings.
+    pub rows: Vec<Vec<String>>,
+    /// Columns detected as likely primary key candidates.
+    pub primary_key_candidates: Vec<String>,
+    /// Columns detected as likely noise (timestamps, audit fields, etc.).
+    pub noise_columns: Vec<String>,
+}
+
+/// Opens a CSV file and returns schema, rows, and auto-detected hints in a
+/// single call.
+///
+/// Combines [`reader::read_csv`], [`reader::detect_primary_key_candidates`],
+/// and [`reader::detect_noise_columns`] so callers avoid three separate
+/// invocations.
+///
+/// # Errors
+/// - [`AppError::Io`] / [`AppError::Csv`] if the file cannot be read.
+pub fn read_csv_with_hints(path: &str) -> Result<CsvReadResult, AppError> {
+    let (schema, rows) = reader::read_csv(path)?;
+    let primary_key_candidates = reader::detect_primary_key_candidates(&schema);
+    let noise_columns = reader::detect_noise_columns(&schema);
+    Ok(CsvReadResult {
+        schema,
+        rows,
+        primary_key_candidates,
+        noise_columns,
+    })
+}
+
 use serde::{Deserialize, Serialize};
 
 /// Describes a single column in a CSV schema.

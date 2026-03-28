@@ -8,6 +8,14 @@ export interface CsvSchema {
   row_count: number;
 }
 
+/** Returned by cmd_read_csv — schema, rows, and auto-detected hints in one. */
+export interface CsvReadResult {
+  schema: CsvSchema;
+  rows: string[][];
+  primary_key_candidates: string[];
+  noise_columns: string[];
+}
+
 export interface DiffConfig {
   primary_keys: string[];
   ignore_columns: string[];
@@ -43,6 +51,17 @@ export interface DiffResult {
   auto_ignored_columns: string[];
 }
 
+export interface DiffSummary {
+  added: number;
+  deleted: number;
+  modified: number;
+  unchanged: number;
+  total_a: number;
+  total_b: number;
+  has_schema_changes: boolean;
+  schema_changes_count: number;
+}
+
 export interface MergeConfig {
   primary_keys: string[];
   output_path: string | null;
@@ -53,6 +72,14 @@ export interface MergeResult {
   rows_from_a: number;
   rows_from_b: number;
   output_csv: string;
+}
+
+export type MergeSource = "FileA" | "FileB";
+
+export interface CellSelection {
+  key_values: string[];
+  column: string;
+  source: MergeSource;
 }
 
 export type Row = string[];
