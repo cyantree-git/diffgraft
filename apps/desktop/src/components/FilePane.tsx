@@ -12,7 +12,6 @@ interface Props {
   currentChangeIndex: number;
   changeIndex: number[];
   scrollRef: RefObject<HTMLDivElement>;
-  setRowRef: (i: number, el: HTMLTableRowElement | null) => void;
   onFileLoaded: (result: CsvReadResult, name: string) => void;
   highlightCells: boolean;
 }
@@ -25,7 +24,6 @@ export function FilePane({
   currentChangeIndex,
   changeIndex,
   scrollRef,
-  setRowRef,
   onFileLoaded,
   highlightCells,
 }: Props) {
@@ -49,7 +47,6 @@ export function FilePane({
         rawRows={file.rows}
         currentChangeIndex={currentChangeIndex}
         changeIndex={changeIndex}
-        setRowRef={setRowRef}
         highlightCells={highlightCells}
       />
     </div>

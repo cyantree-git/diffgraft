@@ -217,3 +217,30 @@ Report:
 - Scroll: is jitter gone?
 - Drag and drop: working or deferred to v1.1?
 - Actual measured ROW_HEIGHT used
+
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+Claude Reply 
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+
+
+⏺ Clean. Here's a summary of what was done:
+
+  Bug 1 (CRITICAL) — fixed: Removed rowRefsA/rowRefsB entirely. Added scrollToRow(rowIndex) that directly sets scrollRefA.current.scrollTop
+   and scrollRefB.current.scrollTop to the same computed value (rowIndex * 37 - containerHeight/2 + 18.5). Navigation now bypasses scroll
+  event listeners entirely.
+
+  Bug 2 (MEDIUM) — fixed: Replaced requestAnimationFrame with setTimeout(..., 50) in both syncFromA and syncFromB, giving programmatic
+  scroll events time to fire and be ignored before the lock releases.
+
+  Bug 3 (MEDIUM) — deferred: fileDropEnabled is a Tauri v1 config option and doesn't exist in Tauri v2's schema. File picker (click to
+  open) works reliably. Native drag-and-drop in Tauri v2 requires the @tauri-apps/api/webviewWindow event API — deferred to v1.1.

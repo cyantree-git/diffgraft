@@ -8,7 +8,6 @@ interface Props {
   rawRows: string[][];
   currentChangeIndex: number;
   changeIndex: number[];
-  setRowRef: (i: number, el: HTMLTableRowElement | null) => void;
   highlightCells: boolean;
 }
 
@@ -24,7 +23,6 @@ export function DiffPaneTable({
   rawRows,
   currentChangeIndex,
   changeIndex,
-  setRowRef,
   highlightCells,
 }: Props) {
   const cols = schema.columns;
@@ -85,7 +83,6 @@ export function DiffPaneTable({
             <tr
               key={i}
               className={trClass}
-              ref={(el) => setRowRef(i, el)}
             >
               <td style={{ width: 48, textAlign: "right", color: "#475569", paddingRight: 8, fontSize: 11 }}>
                 {row.rowNumber}

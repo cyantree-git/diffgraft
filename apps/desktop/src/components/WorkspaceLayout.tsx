@@ -69,25 +69,6 @@ export function WorkspaceLayout({
     setCurrentChangeIndex(-1);
   }, [diffResult]);
 
-  // ── row refs (A side only — B syncs via scroll) ───────────────────────
-  const rowRefsA = useRef<(HTMLTableRowElement | null)[]>([]);
-
-  const setRowRefA = useCallback(
-    (i: number, el: HTMLTableRowElement | null) => {
-      rowRefsA.current[i] = el;
-    },
-    []
-  );
-
-  // B side refs (needed to pass as prop but B doesn't need nav scroll)
-  const rowRefsB = useRef<(HTMLTableRowElement | null)[]>([]);
-  const setRowRefB = useCallback(
-    (i: number, el: HTMLTableRowElement | null) => {
-      rowRefsB.current[i] = el;
-    },
-    []
-  );
-
   // ── scroll refs ────────────────────────────────────────────────────────
   const scrollRefA = useRef<HTMLDivElement>(null);
   const scrollRefB = useRef<HTMLDivElement>(null);
@@ -103,7 +84,7 @@ export function WorkspaceLayout({
       isSyncing.current = true;
       b!.scrollTop  = a!.scrollTop;
       b!.scrollLeft = a!.scrollLeft;
-      requestAnimationFrame(() => { isSyncing.current = false; });
+      setTimeout(() => { isSyncing.current = false; }, 50);
     }
 
     function syncFromB() {
@@ -111,7 +92,7 @@ export function WorkspaceLayout({
       isSyncing.current = true;
       a!.scrollTop  = b!.scrollTop;
       a!.scrollLeft = b!.scrollLeft;
-      requestAnimationFrame(() => { isSyncing.current = false; });
+      setTimeout(() => { isSyncing.current = false; }, 50);
     }
 
     a.addEventListener("scroll", syncFromA, { passive: true });
@@ -123,18 +104,29 @@ export function WorkspaceLayout({
   }, [fileA, fileB, diffResult]);
 
   // ── navigation ─────────────────────────────────────────────────────────
+  const ROW_HEIGHT = 37;
+
+  function scrollToRow(rowIndex: number) {
+    const containerHeight = scrollRefA.current?.clientHeight ?? 0;
+    const targetScrollTop = Math.max(0, rowIndex * ROW_HEIGHT - containerHeight / 2 + ROW_HEIGHT / 2);
+    isSyncing.current = true;
+    if (scrollRefA.current) scrollRefA.current.scrollTop = targetScrollTop;
+    if (scrollRefB.current) scrollRefB.current.scrollTop = targetScrollTop;
+    setTimeout(() => { isSyncing.current = false; }, 50);
+  }
+
   const navigateNext = useCallback(() => {
     if (changeIndex.length === 0) return;
     const next = (currentChangeIndex + 1) % changeIndex.length;
     setCurrentChangeIndex(next);
-    rowRefsA.current[changeIndex[next]]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollToRow(changeIndex[next]);
   }, [changeIndex, currentChangeIndex]);
 
   const navigatePrev = useCallback(() => {
     if (changeIndex.length === 0) return;
     const prev = currentChangeIndex <= 0 ? changeIndex.length - 1 : currentChangeIndex - 1;
     setCurrentChangeIndex(prev);
-    rowRefsA.current[changeIndex[prev]]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    scrollToRow(changeIndex[prev]);
   }, [changeIndex, currentChangeIndex]);
 
   // ── highlight cells toggle ─────────────────────────────────────────────
@@ -212,7 +204,6 @@ export function WorkspaceLayout({
             currentChangeIndex={currentChangeIndex}
             changeIndex={changeIndex}
             scrollRef={scrollRefA}
-            setRowRef={setRowRefA}
             onFileLoaded={onFileALoaded}
             highlightCells={highlightCells}
           />
@@ -231,7 +222,6 @@ export function WorkspaceLayout({
             currentChangeIndex={currentChangeIndex}
             changeIndex={changeIndex}
             scrollRef={scrollRefB}
-            setRowRef={setRowRefB}
             onFileLoaded={onFileBLoaded}
             highlightCells={highlightCells}
           />
