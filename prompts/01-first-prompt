@@ -1,0 +1,460 @@
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Scaffold a Cargo workspace called diffgraft.
+
+Directory structure:
+diffgraft/
+├── Cargo.toml                    ← workspace root
+├── CONTEXT.md                    ← project context
+├── .claude/
+│   └── CLAUDE.md                 ← Claude Code instructions
+├── crates/
+│   └── diffgraft-core/           ← pure Rust, zero platform dependencies
+│       ├── Cargo.toml
+│       └── src/
+│           ├── lib.rs
+│           ├── error.rs
+│           ├── reader.rs
+│           ├── diff.rs
+│           ├── merge.rs
+│           └── export.rs
+└── apps/
+    └── desktop/                  ← Tauri v2 app
+        ├── src-tauri/
+        │   ├── Cargo.toml
+        │   └── src/
+        │       └── main.rs
+        └── src/                  ← React TypeScript frontend
+            ├── App.tsx
+            ├── main.tsx
+            └── components/
+                ├── FileDropzone.tsx
+                ├── PrimaryKeySelector.tsx
+                ├── SchemaDiff.tsx
+                ├── DiffTable.tsx
+                └── Attribution.tsx
+
+---
+
+Step 1: Workspace Cargo.toml
+
+[workspace]
+members = [
+  "crates/diffgraft-core",
+  "apps/desktop/src-tauri",
+]
+resolver = "2"
+
+---
+
+Step 2: diffgraft-core Cargo.toml
+
+[package]
+name = "diffgraft-core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+# cdylib = required for WASM compilation
+# rlib   = required for Tauri desktop
+
+[dependencies]
+csv = "1.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+---
+
+Step 3: Create error.rs
+
+Use thiserror to define AppError:
+
+pub enum AppError {
+  Io(#[from] std::io::Error),
+  Csv(#[from] csv::Error),
+  Parse(String),
+  MissingColumn(String),
+  DuplicateKey(String),
+  Export(String),
+}
+
+Implement Display for human readable messages.
+Implement From<AppError> for String for Tauri command returns.
+
+---
+
+Step 4: Create these structs in lib.rs
+
+All structs must derive: Debug, Clone, Serialize, Deserialize
+
+ColumnInfo {
+  name: String,
+  index: usize,
+}
+
+CsvSchema {
+  columns: Vec<ColumnInfo>,
+  row_count: usize,
+}
+
+DiffConfig {
+  primary_keys: Vec<String>,    // empty = order dependent
+  ignore_columns: Vec<String>,  // excluded from diff
+  case_sensitive: bool,         // default false
+}
+
+SchemaDiff {
+  added_columns: Vec<ColumnInfo>,
+  removed_columns: Vec<ColumnInfo>,
+  common_columns: Vec<ColumnInfo>,
+}
+
+CellChange {
+  column: String,
+  value_a: String,
+  value_b: String,
+}
+
+ModifiedRow {
+  key_values: Vec<String>,    // primary key values
+  row_index_a: usize,
+  row_index_b: usize,
+  changes: Vec<CellChange>,
+}
+
+DiffResult {
+  schema_diff: SchemaDiff,
+  added_rows: Vec<usize>,
+  deleted_rows: Vec<usize>,
+  modified_rows: Vec<ModifiedRow>,
+  total_rows_a: usize,
+  total_rows_b: usize,
+  auto_ignored_columns: Vec<String>, // noise columns auto-detected
+}
+
+MergeConfig {
+  primary_keys: Vec<String>,
+  output_path: Option<String>,
+}
+
+MergeResult {
+  total_rows: usize,
+  rows_from_a: usize,
+  rows_from_b: usize,
+  output_csv: String,    // merged CSV as string
+}
+
+---
+
+Step 5: Create reader.rs
+
+Implement these functions:
+
+pub fn read_csv(path: &str) -> Result<(CsvSchema, Vec<Vec<String>>), AppError>
+  - Read CSV file using the csv crate
+  - Return schema (columns + row count) and raw rows as Vec<Vec<String>>
+  - Handle files with and without headers
+  - Handle empty files gracefully
+
+pub fn detect_primary_key_candidates(schema: &CsvSchema) -> Vec<String>
+  - Suggest columns likely to be primary keys
+  - Rules:
+    1. Column name ends with _id, _key, _code, _uuid, _ref
+    2. Column name is exactly: id, key, code, uuid, ref
+    3. Case insensitive matching
+  - Return column names sorted by confidence
+
+pub fn detect_noise_columns(schema: &CsvSchema) -> Vec<String>
+  - Suggest columns to ignore in diff
+  - Rules: column name contains any of:
+    created_at, updated_at, modified_at, created_date,
+    updated_date, last_modified, insert_date, load_date,
+    etl_timestamp, row_hash, checksum, modified_by
+  - Case insensitive matching
+  - Return matched column names
+
+---
+
+Step 6: Create diff.rs
+
+Implement these functions:
+
+pub fn diff_schema(
+  schema_a: &CsvSchema,
+  schema_b: &CsvSchema,
+) -> SchemaDiff
+  - Compare columns between two schemas
+  - Return added, removed, and common columns
+
+pub fn diff_csv(
+  rows_a: &[Vec<String>],
+  rows_b: &[Vec<String>],
+  schema_a: &CsvSchema,
+  schema_b: &CsvSchema,
+  config: &DiffConfig,
+) -> Result<DiffResult, AppError>
+  - If config.primary_keys is empty: diff by row order
+  - If config.primary_keys is set: diff by primary key
+    1. Build HashMap<Vec<String>, usize> keyed by primary key values
+    2. Keys in A not in B → deleted_rows
+    3. Keys in B not in A → added_rows
+    4. Keys in both → compare cell by cell → modified_rows
+  - Respect config.ignore_columns
+  - Respect config.case_sensitive
+  - Return DiffResult
+
+fn build_key_index(
+  rows: &[Vec<String>],
+  schema: &CsvSchema,
+  key_columns: &[String],
+) -> Result<HashMap<Vec<String>, usize>, AppError>
+  - Private helper
+  - Returns error AppError::DuplicateKey if primary key is not unique
+
+---
+
+Step 7: Create merge.rs stub
+
+pub fn cherry_pick_merge(
+  rows_a: &[Vec<String>],
+  rows_b: &[Vec<String>],
+  schema_a: &CsvSchema,
+  config: &MergeConfig,
+  selections: &[CellSelection],
+) -> Result<MergeResult, AppError>
+
+CellSelection {
+  key_values: Vec<String>,    // identifies the row
+  column: String,             // which column
+  source: MergeSource,        // take from A or B
+}
+
+pub enum MergeSource {
+  FileA,
+  FileB,
+}
+
+Leave implementation as todo!() for now.
+The struct definitions are what matter for compilation.
+
+---
+
+Step 8: Create export.rs stub
+
+pub fn export_csv(
+  rows: &[Vec<String>],
+  schema: &CsvSchema,
+  output_path: Option<&str>,
+) -> Result<String, AppError>
+  - If output_path is Some: write to file, return path
+  - If output_path is None: return CSV as String
+  - Leave as todo!() for now
+
+---
+
+Step 9: apps/desktop Tauri scaffold
+
+Scaffold Tauri v2 with React TypeScript Vite template.
+
+src-tauri/Cargo.toml add dependency:
+diffgraft-core = { path = "../../../crates/diffgraft-core" }
+
+Update tauri.conf.json:
+- productName: "DiffGraft"
+- version: "0.1.0"
+- identifier: "io.diffgraft.app"
+
+Register these Tauri commands in main.rs:
+
+cmd_read_csv(path: String) 
+  -> Result<(CsvSchema, Vec<Vec<String>>), String>
+
+cmd_detect_primary_key_candidates(schema: CsvSchema) 
+  -> Result<Vec<String>, String>
+
+cmd_detect_noise_columns(schema: CsvSchema) 
+  -> Result<Vec<String>, String>
+
+cmd_diff_csv(
+  rows_a: Vec<Vec<String>>,
+  rows_b: Vec<Vec<String>>,
+  schema_a: CsvSchema,
+  schema_b: CsvSchema,
+  config: DiffConfig,
+) -> Result<DiffResult, String>
+
+---
+
+Step 10: React frontend scaffold
+
+Create these components with placeholder UI:
+
+FileDropzone.tsx
+  Props: { onFileLoaded: (schema: CsvSchema, rows: Row[]) => void }
+  Two drop zones side by side: "File A" and "File B"
+  Accept .csv files only
+  Show filename and row count after loading
+
+PrimaryKeySelector.tsx
+  Props: { schema: CsvSchema, onConfigured: (config: DiffConfig) => void }
+  List all columns as checkboxes for primary key selection
+  Pre-check auto-detected candidates
+  Show noise column suggestions with "ignore" toggle
+  "No primary key" option with warning
+
+SchemaDiff.tsx
+  Props: { schemaDiff: SchemaDiff }
+  Added columns in green
+  Removed columns in red
+  Common columns count in grey
+
+DiffTable.tsx
+  Props: { result: DiffResult }
+  Summary bar: X added | Y deleted | Z modified | W unchanged
+  Added rows: green background
+  Deleted rows: red background
+  Modified rows: amber background, show old/new values on expand
+  Toggle to show/hide unchanged rows
+
+Attribution.tsx
+  Fixed bottom right corner
+  Text: "built by th4t.dev/sid"
+  Links to https://th4t.dev/sid
+  opacity: 0.4, increases to 0.8 on hover
+  font-size: 11px
+  No external dependencies — plain CSS
+
+Create src/types/diffgraft.ts:
+TypeScript types mirroring all Rust structs exactly.
+
+---
+
+Step 11: Create CONTEXT.md in repo root
+
+# DiffGraft
+
+Free, open-source structural diff tool for data files.
+Open two files. See exactly what changed. Nothing else.
+
+## Mission
+Structural diff intelligence for CSV, Parquet and JSON.
+Not line-by-line text comparison.
+Column-aware, row-aware, schema-aware, primary-key-aware.
+
+## v1 Scope — CSV only
+- Open two CSV files (web + desktop)
+- Primary key detection (single + composite)
+- Auto-detect primary key candidates
+- Auto-detect and suggest ignoring noise columns
+- Schema diff
+- Row diff: added, deleted, modified
+- Cell-level change highlighting
+- Cherry-pick merge
+- Export merged result as CSV
+- Export diff as JSON
+- Attribution: built by th4t.dev/sid
+- Data never leaves the browser (web version)
+- Performance: 1M rows under 2 seconds
+
+## Stack
+- Tauri v2 (desktop shell)
+- Rust + csv crate (core diff engine)
+- React + TypeScript + Vite (UI)
+- wasm-bindgen (web version, future)
+- serde + serde_json
+
+## Architecture Rules
+- diffgraft-core has ZERO platform dependencies
+- No Tauri imports in diffgraft-core
+- No filesystem calls in diffgraft-core
+  (caller passes file contents, core returns results)
+- All Tauri commands in main.rs only
+- React owns rendering, Rust owns computation
+- No unwrap() or expect() in production code
+- No panic!() in production code paths
+
+## Modules
+- reader.rs   read CSV, detect schema, detect key candidates
+- diff.rs     structural diff engine
+- merge.rs    cherry-pick merge engine
+- export.rs   write merged output
+
+## Performance Requirements
+- 1M row CSV diff: under 2 seconds
+- 200MB CSV: under 5 seconds
+- Memory: never more than 2x file size
+
+## Domain
+diffgraft.io + diffgraft.com
+
+## Company
+CyanTree (cyantree.co.uk)
+
+## Attribution
+All UI surfaces show: "built by th4t.dev/sid"
+Bottom right corner, low opacity, links to https://th4t.dev/sid
+
+## License
+Apache 2.0
+
+---
+
+Step 12: Create .claude/CLAUDE.md
+
+# DiffGraft — Claude Code Instructions
+
+## Read First
+Always read CONTEXT.md before doing anything.
+
+## Non-Negotiable Rules
+
+### Rust
+- No unwrap() or expect() anywhere in crates/
+- No panic!() in production code paths
+- Use ? operator and AppError everywhere
+- Run cargo check after every file change
+- Run cargo clippy before declaring any task complete
+- All public functions must have doc comments
+
+### Architecture
+- diffgraft-core is platform agnostic — forever
+- Never import tauri in diffgraft-core
+- Never call std::fs in diffgraft-core
+- Caller reads files, passes contents to core
+- Core receives data, returns results
+- This is what enables WASM compilation later
+
+### Testing
+- Every function in diff.rs needs a unit test
+- Test with: empty CSV, single row, 1M rows, duplicate keys
+- Never mark complete if cargo test is failing
+
+### Git
+- Branch naming: feat/*, fix/*, chore/*
+- Conventional commits format
+- Never commit directly to main
+
+## Module Responsibilities
+| Module    | Owns                        | Never touches     |
+|-----------|-----------------------------|-------------------|
+| reader.rs | CSV parsing, schema detect  | diff logic        |
+| diff.rs   | structural diff engine      | file I/O          |
+| merge.rs  | cherry-pick merge           | file I/O, diff    |
+| export.rs | CSV/JSON output             | diff, merge logic |
+| main.rs   | Tauri commands only         | business logic    |
+
+## Current Status
+🚧 Initial scaffold — nothing working yet
+
+---
+
+Final instruction:
+Run cargo check on the full workspace.
+Fix ALL errors and warnings before stopping.
+Report final status: file list created + cargo check result.
