@@ -1,0 +1,109 @@
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Current status:
+- Navigation highlighting works correctly
+- Navigation scrolling is wrong — highlights row 67
+  but scrolls to row 101
+- Root cause: ROW_HEIGHT constant is incorrect
+
+Bug: scroll calculation uses wrong ROW_HEIGHT
+
+Current code does something like:
+  const targetScrollTop = rowIndex * ROW_HEIGHT
+  - (containerHeight / 2)
+  + (ROW_HEIGHT / 2)
+
+ROW_HEIGHT is hardcoded. It is wrong.
+The scroll overshoots because ROW_HEIGHT is too large.
+
+Fix: measure actual row height at runtime.
+Do not use a hardcoded constant.
+
+---
+
+Replace the scrollToRow function with this approach:
+
+Store a ref to the first rendered tbody row:
+  const firstRowRef = useRef<HTMLTableRowElement | null>(null)
+
+Assign it to the first <tr> in DiffPaneTable:
+  <tr ref={index === 0 ? firstRowRef : undefined} ...>
+
+Measure actual row height before scrolling:
+  function getRowHeight(): number {
+    return firstRowRef.current?.getBoundingClientRect().height ?? 37
+  }
+
+Use measured height in scroll calculation:
+  function scrollToRow(rowIndex: number) {
+    const rowHeight = getRowHeight()
+    const containerHeight = scrollRefA.current?.clientHeight ?? 0
+
+    const targetScrollTop = Math.max(
+      0,
+      (rowIndex * rowHeight)
+        - (containerHeight / 2)
+        + (rowHeight / 2)
+    )
+
+    isSyncingRef.current = true
+
+    if (scrollRefA.current) {
+      scrollRefA.current.scrollTop = targetScrollTop
+    }
+    if (scrollRefB.current) {
+      scrollRefB.current.scrollTop = targetScrollTop
+    }
+
+    setTimeout(() => {
+      isSyncingRef.current = false
+    }, 50)
+  }
+
+---
+
+Additional fix: verify rowIndex passed to scrollToRow
+
+The rowIndex passed to scrollToRow must be the
+visual position of the row in the table body —
+the nth <tr> in <tbody>, zero-based.
+
+If unifiedRows is the array rendered directly
+with no filtering, then:
+  changeIndex[pos] is the correct index to pass.
+
+Verify this is the case. If unchanged rows can be
+hidden by a toggle, the visual index differs from
+the array index when rows are filtered out.
+
+For now with unchanged rows always visible,
+changeIndex[pos] should equal the visual index.
+Add a console.log to confirm:
+
+  console.log('navigating to', {
+    changePos: pos,
+    arrayIndex: changeIndex[pos],
+    rowHeight: getRowHeight(),
+    targetScrollTop: calculatedScrollTop,
+    containerHeight: scrollRefA.current?.clientHeight,
+  })
+
+Run this, navigate to change 2, and report
+what the console shows. This will confirm
+whether rowIndex or ROW_HEIGHT is the issue.
+
+---
+
+After the fix, test:
+1. Load data_1.csv and data_2.csv
+2. Press next-change (↓)
+   → highlights row 37, scrolls to row 37 centred ✅
+3. Press next-change again
+   → highlights row 67, scrolls to row 67 centred ✅
+4. Press next-change 10 times rapidly
+   → each press scrolls to correct row ✅
+5. Highlighted row must always be the centred row
+   in both panes simultaneously ✅
+
+Report the console.log output from step 3
+(navigating to change 2, the row 67 case).
