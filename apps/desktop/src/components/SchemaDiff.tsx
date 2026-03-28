@@ -5,10 +5,10 @@ interface Props {
 }
 
 export function SchemaDiff({ schemaDiff }: Props) {
-  const { added_columns, removed_columns, common_columns } = schemaDiff;
-  const hasChanges = added_columns.length > 0 || removed_columns.length > 0;
+  const { addedColumns, removedColumns, commonColumns } = schemaDiff;
+  const hasChanges = addedColumns.length > 0 || removedColumns.length > 0;
 
-  if (!hasChanges && common_columns.length === 0) return null;
+  if (!hasChanges && commonColumns.length === 0) return null;
 
   return (
     <div
@@ -22,12 +22,12 @@ export function SchemaDiff({ schemaDiff }: Props) {
       <h3 style={{ margin: "0 0 12px" }}>Schema Diff</h3>
 
       <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" }}>
-        {added_columns.length > 0 && (
+        {addedColumns.length > 0 && (
           <div>
             <div style={{ fontWeight: 500, color: "#16a34a", marginBottom: "4px" }}>
-              + Added ({added_columns.length})
+              + Added ({addedColumns.length})
             </div>
-            {added_columns.map((col) => (
+            {addedColumns.map((col) => (
               <div
                 key={col.name}
                 style={{
@@ -45,12 +45,12 @@ export function SchemaDiff({ schemaDiff }: Props) {
           </div>
         )}
 
-        {removed_columns.length > 0 && (
+        {removedColumns.length > 0 && (
           <div>
             <div style={{ fontWeight: 500, color: "#dc2626", marginBottom: "4px" }}>
-              - Removed ({removed_columns.length})
+              - Removed ({removedColumns.length})
             </div>
-            {removed_columns.map((col) => (
+            {removedColumns.map((col) => (
               <div
                 key={col.name}
                 style={{
@@ -70,10 +70,10 @@ export function SchemaDiff({ schemaDiff }: Props) {
 
         <div>
           <div style={{ fontWeight: 500, color: "#6b7280", marginBottom: "4px" }}>
-            Common ({common_columns.length})
+            Common ({commonColumns.length})
           </div>
           <div style={{ fontSize: "13px", color: "#9ca3af" }}>
-            {common_columns.length} shared column{common_columns.length !== 1 ? "s" : ""}
+            {commonColumns.length} shared column{commonColumns.length !== 1 ? "s" : ""}
           </div>
         </div>
       </div>

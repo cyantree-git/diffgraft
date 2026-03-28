@@ -5,50 +5,50 @@ export interface ColumnInfo {
 
 export interface CsvSchema {
   columns: ColumnInfo[];
-  row_count: number;
+  rowCount: number;
 }
 
 /** Returned by cmd_read_csv — schema, rows, and auto-detected hints in one. */
 export interface CsvReadResult {
   schema: CsvSchema;
   rows: string[][];
-  primary_key_candidates: string[];
-  noise_columns: string[];
+  primaryKeyCandidates: string[];
+  noiseColumns: string[];
 }
 
 export interface DiffConfig {
-  primary_keys: string[];
-  ignore_columns: string[];
-  case_sensitive: boolean;
+  primaryKeys: string[];
+  ignoreColumns: string[];
+  caseSensitive: boolean;
 }
 
 export interface SchemaDiff {
-  added_columns: ColumnInfo[];
-  removed_columns: ColumnInfo[];
-  common_columns: ColumnInfo[];
+  addedColumns: ColumnInfo[];
+  removedColumns: ColumnInfo[];
+  commonColumns: ColumnInfo[];
 }
 
 export interface CellChange {
   column: string;
-  value_a: string;
-  value_b: string;
+  valueA: string;
+  valueB: string;
 }
 
 export interface ModifiedRow {
-  key_values: string[];
-  row_index_a: number;
-  row_index_b: number;
+  keyValues: string[];
+  rowIndexA: number;
+  rowIndexB: number;
   changes: CellChange[];
 }
 
 export interface DiffResult {
-  schema_diff: SchemaDiff;
-  added_rows: number[];
-  deleted_rows: number[];
-  modified_rows: ModifiedRow[];
-  total_rows_a: number;
-  total_rows_b: number;
-  auto_ignored_columns: string[];
+  schemaDiff: SchemaDiff;
+  addedRows: number[];
+  deletedRows: number[];
+  modifiedRows: ModifiedRow[];
+  totalRowsA: number;
+  totalRowsB: number;
+  autoIgnoredColumns: string[];
 }
 
 export interface DiffSummary {
@@ -56,28 +56,29 @@ export interface DiffSummary {
   deleted: number;
   modified: number;
   unchanged: number;
-  total_a: number;
-  total_b: number;
-  has_schema_changes: boolean;
-  schema_changes_count: number;
+  totalA: number;
+  totalB: number;
+  hasSchemaChanges: boolean;
+  schemaChangesCount: number;
 }
 
 export interface MergeConfig {
-  primary_keys: string[];
-  output_path: string | null;
+  primaryKeys: string[];
+  outputPath: string | null;
 }
 
 export interface MergeResult {
-  total_rows: number;
-  rows_from_a: number;
-  rows_from_b: number;
-  output_csv: string;
+  totalRows: number;
+  rowsFromA: number;
+  rowsFromB: number;
+  outputCsv: string;
 }
 
-export type MergeSource = "FileA" | "FileB";
+// "fileA" | "fileB" matches #[serde(rename_all = "camelCase")] on the Rust enum.
+export type MergeSource = "fileA" | "fileB";
 
 export interface CellSelection {
-  key_values: string[];
+  keyValues: string[];
   column: string;
   source: MergeSource;
 }

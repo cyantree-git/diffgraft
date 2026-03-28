@@ -12,9 +12,9 @@ function ExpandedChanges({ row }: { row: ModifiedRow }) {
         <div key={change.column} style={{ marginBottom: "2px" }}>
           <span style={{ fontWeight: 600 }}>{change.column}</span>:{" "}
           <span style={{ color: "#dc2626", textDecoration: "line-through" }}>
-            {change.value_a}
+            {change.valueA}
           </span>{" "}
-          <span style={{ color: "#16a34a" }}>{change.value_b}</span>
+          <span style={{ color: "#16a34a" }}>{change.valueB}</span>
         </div>
       ))}
     </div>
@@ -26,9 +26,9 @@ export function DiffTable({ result }: Props) {
   const [showUnchanged, setShowUnchanged] = useState(false);
 
   const unchanged =
-    Math.min(result.total_rows_a, result.total_rows_b) -
-    result.modified_rows.length -
-    result.deleted_rows.filter((i) => i < result.total_rows_b).length;
+    Math.min(result.totalRowsA, result.totalRowsB) -
+    result.modifiedRows.length -
+    result.deletedRows.filter((i) => i < result.totalRowsB).length;
 
   function toggleExpand(idx: number) {
     setExpandedRows((prev) => {
@@ -58,13 +58,13 @@ export function DiffTable({ result }: Props) {
         }}
       >
         <span style={{ color: "#16a34a", fontWeight: 600 }}>
-          +{result.added_rows.length} added
+          +{result.addedRows.length} added
         </span>
         <span style={{ color: "#dc2626", fontWeight: 600 }}>
-          -{result.deleted_rows.length} deleted
+          -{result.deletedRows.length} deleted
         </span>
         <span style={{ color: "#d97706", fontWeight: 600 }}>
-          ~{result.modified_rows.length} modified
+          ~{result.modifiedRows.length} modified
         </span>
         <span style={{ color: "#6b7280" }}>{unchanged} unchanged</span>
 
@@ -88,7 +88,7 @@ export function DiffTable({ result }: Props) {
       </div>
 
       <div style={{ fontFamily: "monospace", fontSize: "13px" }}>
-        {result.deleted_rows.map((idx) => (
+        {result.deletedRows.map((idx) => (
           <div
             key={`del-${idx}`}
             style={{
@@ -102,7 +102,7 @@ export function DiffTable({ result }: Props) {
           </div>
         ))}
 
-        {result.added_rows.map((idx) => (
+        {result.addedRows.map((idx) => (
           <div
             key={`add-${idx}`}
             style={{
@@ -116,7 +116,7 @@ export function DiffTable({ result }: Props) {
           </div>
         ))}
 
-        {result.modified_rows.map((row, i) => (
+        {result.modifiedRows.map((row, i) => (
           <div
             key={`mod-${i}`}
             style={{
@@ -129,7 +129,7 @@ export function DiffTable({ result }: Props) {
             onClick={() => toggleExpand(i)}
           >
             <div>
-              ~ row {row.row_index_a + 1} ({row.changes.length} change
+              ~ row {row.rowIndexA + 1} ({row.changes.length} change
               {row.changes.length !== 1 ? "s" : ""})
               <span style={{ color: "#9ca3af", marginLeft: "8px", fontSize: "11px" }}>
                 {expandedRows.has(i) ? "collapse" : "expand"}

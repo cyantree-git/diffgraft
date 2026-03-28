@@ -26,7 +26,7 @@ function SingleDropZone({ label, onLoaded }: DropZoneProps) {
           path: filePath,
         });
         setFileName(name);
-        setRowCount(schema.row_count);
+        setRowCount(schema.rowCount);
         onLoaded(schema, rows);
       } catch (e) {
         setError(String(e));

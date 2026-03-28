@@ -5,7 +5,11 @@ use serde::{Deserialize, Serialize};
 use crate::{AppError, CsvSchema, MergeConfig, MergeResult};
 
 /// Identifies which source file a merged cell value should come from.
+///
+/// Serialises as `"fileA"` / `"fileB"` (camelCase) to match TypeScript
+/// conventions across the Tauri IPC boundary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum MergeSource {
     /// Take the value from file A.
     FileA,
@@ -15,6 +19,7 @@ pub enum MergeSource {
 
 /// A single cell-level selection made during a cherry-pick merge.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CellSelection {
     /// Primary key values that uniquely identify the target row.
     pub key_values: Vec<String>,

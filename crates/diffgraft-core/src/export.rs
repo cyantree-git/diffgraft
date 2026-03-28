@@ -241,11 +241,11 @@ mod tests {
     fn test_export_diff_json_contains_required_keys() {
         let result = empty_diff_result(10, 8);
         let json = export_diff_json(&result).unwrap();
-        assert!(json.contains("\"added_rows\""));
-        assert!(json.contains("\"deleted_rows\""));
-        assert!(json.contains("\"modified_rows\""));
-        assert!(json.contains("\"total_rows_a\""));
-        assert!(json.contains("\"total_rows_b\""));
+        assert!(json.contains("\"addedRows\""));
+        assert!(json.contains("\"deletedRows\""));
+        assert!(json.contains("\"modifiedRows\""));
+        assert!(json.contains("\"totalRowsA\""));
+        assert!(json.contains("\"totalRowsB\""));
     }
 
     #[test]

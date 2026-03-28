@@ -57,9 +57,9 @@ export function PrimaryKeySelector({
 
   function handleRun() {
     const config: DiffConfig = {
-      primary_keys: noPrimaryKey ? [] : Array.from(selectedKeys),
-      ignore_columns: Array.from(ignoredColumns),
-      case_sensitive: false,
+      primaryKeys: noPrimaryKey ? [] : Array.from(selectedKeys),
+      ignoreColumns: Array.from(ignoredColumns),
+      caseSensitive: false,
     };
     onConfigured(config);
   }

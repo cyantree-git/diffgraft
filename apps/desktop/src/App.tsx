@@ -52,7 +52,7 @@ function FileSlot({ label, file, onOpen, disabled }: FileSlotProps) {
       {file ? (
         <div>
           <div style={{ fontSize: "13px", color: "#e0e0e0", wordBreak: "break-all" }}>
-            {file.schema.columns.length} columns · {file.schema.row_count} rows
+            {file.schema.columns.length} columns · {file.schema.rowCount} rows
           </div>
           <div style={{ marginTop: "6px", display: "flex", flexWrap: "wrap", gap: "4px" }}>
             {file.schema.columns.slice(0, 6).map((c) => (
@@ -196,8 +196,8 @@ export default function App() {
       {fileA && fileB && (
         <PrimaryKeySelector
           schema={fileA.schema}
-          initialCandidates={fileA.primary_key_candidates}
-          initialNoise={fileA.noise_columns}
+          initialCandidates={fileA.primaryKeyCandidates}
+          initialNoise={fileA.noiseColumns}
           onConfigured={handleRunDiff}
           disabled={isLoading}
         />
@@ -221,9 +221,9 @@ export default function App() {
           <span style={{ color: "#f87171" }}>-{diffSummary.deleted} deleted</span>
           <span style={{ color: "#facc15" }}>~{diffSummary.modified} modified</span>
           <span style={{ color: "#888" }}>{diffSummary.unchanged} unchanged</span>
-          {diffSummary.has_schema_changes && (
+          {diffSummary.hasSchemaChanges && (
             <span style={{ color: "#c084fc" }}>
-              {diffSummary.schema_changes_count} schema change{diffSummary.schema_changes_count !== 1 ? "s" : ""}
+              {diffSummary.schemaChangesCount} schema change{diffSummary.schemaChangesCount !== 1 ? "s" : ""}
             </span>
           )}
           <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
@@ -261,7 +261,7 @@ export default function App() {
 
       {diffResult && (
         <>
-          <SchemaDiff schemaDiff={diffResult.schema_diff} />
+          <SchemaDiff schemaDiff={diffResult.schemaDiff} />
           <DiffTable result={diffResult} />
         </>
       )}

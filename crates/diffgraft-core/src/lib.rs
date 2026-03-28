@@ -6,9 +6,20 @@ pub mod reader;
 
 pub use error::AppError;
 
+use serde::{Deserialize, Serialize};
+
+// Serialisation note:
+// All public structs use #[serde(rename_all = "camelCase")]
+// to ensure clean interop with TypeScript across the Tauri
+// IPC boundary. Rust field names remain snake_case internally.
+// JSON produced by Tauri uses camelCase matching TypeScript
+// conventions. This is a project-wide convention — all new
+// structs crossing the IPC boundary must follow it.
+
 /// The result of opening a CSV file, bundling schema, rows, and auto-detected
 /// hints in one struct so the frontend needs only a single round-trip.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CsvReadResult {
     /// The inferred schema (columns + row count).
     pub schema: CsvSchema,
@@ -41,10 +52,9 @@ pub fn read_csv_with_hints(path: &str) -> Result<CsvReadResult, AppError> {
     })
 }
 
-use serde::{Deserialize, Serialize};
-
 /// Describes a single column in a CSV schema.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ColumnInfo {
     /// Column header name.
     pub name: String,
@@ -54,6 +64,7 @@ pub struct ColumnInfo {
 
 /// The inferred schema of a CSV file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CsvSchema {
     /// Ordered list of columns.
     pub columns: Vec<ColumnInfo>,
@@ -63,6 +74,7 @@ pub struct CsvSchema {
 
 /// Configuration that drives a diff operation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiffConfig {
     /// Columns whose combined values uniquely identify a row.
     /// An empty vec means diff is performed by row order.
@@ -73,9 +85,9 @@ pub struct DiffConfig {
     pub case_sensitive: bool,
 }
 
-
 /// The result of comparing two CSV schemas.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SchemaDiff {
     /// Columns present in B but not in A.
     pub added_columns: Vec<ColumnInfo>,
@@ -87,6 +99,7 @@ pub struct SchemaDiff {
 
 /// A single cell-level change within a modified row.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CellChange {
     /// The column in which the change occurred.
     pub column: String,
@@ -98,6 +111,7 @@ pub struct CellChange {
 
 /// A row that exists in both files but has at least one differing cell.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModifiedRow {
     /// The primary key values that identify this row.
     pub key_values: Vec<String>,
@@ -111,6 +125,7 @@ pub struct ModifiedRow {
 
 /// The full result of a CSV diff operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiffResult {
     /// Schema-level differences between the two files.
     pub schema_diff: SchemaDiff,
@@ -130,6 +145,7 @@ pub struct DiffResult {
 
 /// Configuration for a cherry-pick merge operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MergeConfig {
     /// Columns used to match rows between A and B.
     pub primary_keys: Vec<String>,
@@ -139,6 +155,7 @@ pub struct MergeConfig {
 
 /// A compact, human-readable summary derived from a [`DiffResult`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DiffSummary {
     /// Rows present in B but not in A.
     pub added: usize,
@@ -160,6 +177,7 @@ pub struct DiffSummary {
 
 /// The result of a merge operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MergeResult {
     /// Total rows in the merged output.
     pub total_rows: usize,
