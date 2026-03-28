@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PrimaryKeySelector } from "./components/PrimaryKeySelector";
 import { SchemaDiff } from "./components/SchemaDiff";
-import { DiffTable } from "./components/DiffTable";
+import { SideBySideDiffTable } from "./components/SideBySideDiffTable";
 import { Attribution } from "./components/Attribution";
 import {
   openFileDialog,
@@ -31,11 +31,12 @@ function downloadFile(content: string, filename: string, mimeType: string) {
 interface FileSlotProps {
   label: string;
   file: CsvReadResult | null;
+  fileName: string | null;
   onOpen: () => void;
   disabled: boolean;
 }
 
-function FileSlot({ label, file, onOpen, disabled }: FileSlotProps) {
+function FileSlot({ label, file, fileName, onOpen, disabled }: FileSlotProps) {
   return (
     <div
       style={{
@@ -49,19 +50,22 @@ function FileSlot({ label, file, onOpen, disabled }: FileSlotProps) {
       <div style={{ fontWeight: 600, marginBottom: "8px", color: "#aaa", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
         {label}
       </div>
-      {file ? (
+      {file && fileName ? (
         <div>
-          <div style={{ fontSize: "13px", color: "#e0e0e0", wordBreak: "break-all" }}>
+          <div style={{ fontSize: "13px", color: "#e0e0e0", wordBreak: "break-all", marginBottom: "2px" }}>
+            {fileName}
+          </div>
+          <div style={{ fontSize: "12px", color: "#666" }}>
             {file.schema.columns.length} columns · {file.schema.rowCount} rows
           </div>
           <div style={{ marginTop: "6px", display: "flex", flexWrap: "wrap", gap: "4px" }}>
-            {file.schema.columns.slice(0, 6).map((c) => (
+            {file.schema.columns.slice(0, 5).map((c) => (
               <span key={c.name} style={{ background: "#2a2a2a", border: "1px solid #444", borderRadius: "4px", padding: "2px 6px", fontSize: "11px", color: "#bbb" }}>
                 {c.name}
               </span>
             ))}
-            {file.schema.columns.length > 6 && (
-              <span style={{ fontSize: "11px", color: "#666" }}>+{file.schema.columns.length - 6} more</span>
+            {file.schema.columns.length > 5 && (
+              <span style={{ fontSize: "11px", color: "#666" }}>+{file.schema.columns.length - 5} more</span>
             )}
           </div>
         </div>
@@ -92,10 +96,16 @@ function FileSlot({ label, file, onOpen, disabled }: FileSlotProps) {
 export default function App() {
   const [fileA, setFileA] = useState<CsvReadResult | null>(null);
   const [fileB, setFileB] = useState<CsvReadResult | null>(null);
+  const [fileNameA, setFileNameA] = useState<string | null>(null);
+  const [fileNameB, setFileNameB] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
   const [diffSummary, setDiffSummary] = useState<DiffSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function extractFileName(path: string): string {
+    return path.replace(/\\/g, "/").split("/").pop() ?? path;
+  }
 
   async function handleOpenFile(slot: "A" | "B") {
     setError(null);
@@ -104,12 +114,15 @@ export default function App() {
     setIsLoading(true);
     try {
       const result = await readCsv(path);
+      const name = extractFileName(path);
       if (slot === "A") {
         setFileA(result);
+        setFileNameA(name);
         setDiffResult(null);
         setDiffSummary(null);
       } else {
         setFileB(result);
+        setFileNameB(name);
         setDiffResult(null);
         setDiffSummary(null);
       }
@@ -161,7 +174,7 @@ export default function App() {
       style={{
         fontFamily: "system-ui, sans-serif",
         padding: "24px",
-        maxWidth: "1200px",
+        maxWidth: "1600px",
         margin: "0 auto",
         color: "#e0e0e0",
         minHeight: "100vh",
@@ -173,8 +186,8 @@ export default function App() {
       </p>
 
       <div style={{ display: "flex", gap: "16px", marginBottom: "24px" }}>
-        <FileSlot label="File A (base)" file={fileA} onOpen={() => handleOpenFile("A")} disabled={isLoading} />
-        <FileSlot label="File B (changed)" file={fileB} onOpen={() => handleOpenFile("B")} disabled={isLoading} />
+        <FileSlot label="File A (base)"    file={fileA} fileName={fileNameA} onOpen={() => handleOpenFile("A")} disabled={isLoading} />
+        <FileSlot label="File B (changed)" file={fileB} fileName={fileNameB} onOpen={() => handleOpenFile("B")} disabled={isLoading} />
       </div>
 
       {error && (
@@ -207,62 +220,54 @@ export default function App() {
         <div
           style={{
             display: "flex",
-            gap: "16px",
-            marginBottom: "16px",
-            padding: "12px 16px",
-            background: "#1a1a1a",
-            border: "1px solid #333",
-            borderRadius: "8px",
-            fontSize: "13px",
-            flexWrap: "wrap",
+            justifyContent: "flex-end",
+            gap: "8px",
+            marginBottom: "8px",
           }}
         >
-          <span style={{ color: "#4ade80" }}>+{diffSummary.added} added</span>
-          <span style={{ color: "#f87171" }}>-{diffSummary.deleted} deleted</span>
-          <span style={{ color: "#facc15" }}>~{diffSummary.modified} modified</span>
-          <span style={{ color: "#888" }}>{diffSummary.unchanged} unchanged</span>
-          {diffSummary.hasSchemaChanges && (
-            <span style={{ color: "#c084fc" }}>
-              {diffSummary.schemaChangesCount} schema change{diffSummary.schemaChangesCount !== 1 ? "s" : ""}
-            </span>
-          )}
-          <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
-            <button
-              onClick={handleExportJson}
-              style={{
-                padding: "4px 12px",
-                background: "#2a2a2a",
-                color: "#aaa",
-                border: "1px solid #444",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "12px",
-              }}
-            >
-              Export JSON
-            </button>
-            <button
-              onClick={handleExportCsv}
-              style={{
-                padding: "4px 12px",
-                background: "#2a2a2a",
-                color: "#aaa",
-                border: "1px solid #444",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontSize: "12px",
-              }}
-            >
-              Export CSV
-            </button>
-          </div>
+          <button
+            onClick={handleExportJson}
+            style={{
+              padding: "4px 12px",
+              background: "#2a2a2a",
+              color: "#aaa",
+              border: "1px solid #444",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "12px",
+            }}
+          >
+            Export JSON
+          </button>
+          <button
+            onClick={handleExportCsv}
+            style={{
+              padding: "4px 12px",
+              background: "#2a2a2a",
+              color: "#aaa",
+              border: "1px solid #444",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "12px",
+            }}
+          >
+            Export CSV
+          </button>
         </div>
       )}
 
-      {diffResult && (
+      {diffResult && fileA && fileB && fileNameA && fileNameB && (
         <>
           <SchemaDiff schemaDiff={diffResult.schemaDiff} />
-          <DiffTable result={diffResult} />
+          <SideBySideDiffTable
+            result={diffResult}
+            schemaA={fileA.schema}
+            schemaB={fileB.schema}
+            rowsA={fileA.rows}
+            rowsB={fileB.rows}
+            fileNameA={fileNameA}
+            fileNameB={fileNameB}
+          />
         </>
       )}
 
