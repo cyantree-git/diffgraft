@@ -103,12 +103,29 @@ export function WorkspaceLayout({
     };
   }, [fileA, fileB, diffResult]);
 
-  // ── navigation ─────────────────────────────────────────────────────────
-  const ROW_HEIGHT = 37;
+  // ── first-row ref (for measuring actual row height) ───────────────────
+  const firstRowRef = useRef<HTMLTableRowElement | null>(null);
 
+  function getRowHeight(): number {
+    return firstRowRef.current?.getBoundingClientRect().height ?? 37;
+  }
+
+  // ── navigation ─────────────────────────────────────────────────────────
   function scrollToRow(rowIndex: number) {
+    const rowHeight = getRowHeight();
     const containerHeight = scrollRefA.current?.clientHeight ?? 0;
-    const targetScrollTop = Math.max(0, rowIndex * ROW_HEIGHT - containerHeight / 2 + ROW_HEIGHT / 2);
+    const targetScrollTop = Math.max(
+      0,
+      rowIndex * rowHeight - containerHeight / 2 + rowHeight / 2,
+    );
+
+    console.log("navigating to", {
+      rowIndex,
+      rowHeight,
+      containerHeight,
+      targetScrollTop,
+    });
+
     isSyncing.current = true;
     if (scrollRefA.current) scrollRefA.current.scrollTop = targetScrollTop;
     if (scrollRefB.current) scrollRefB.current.scrollTop = targetScrollTop;
@@ -119,6 +136,7 @@ export function WorkspaceLayout({
     if (changeIndex.length === 0) return;
     const next = (currentChangeIndex + 1) % changeIndex.length;
     setCurrentChangeIndex(next);
+    console.log("navigateNext", { changePos: next, arrayIndex: changeIndex[next] });
     scrollToRow(changeIndex[next]);
   }, [changeIndex, currentChangeIndex]);
 
@@ -126,6 +144,7 @@ export function WorkspaceLayout({
     if (changeIndex.length === 0) return;
     const prev = currentChangeIndex <= 0 ? changeIndex.length - 1 : currentChangeIndex - 1;
     setCurrentChangeIndex(prev);
+    console.log("navigatePrev", { changePos: prev, arrayIndex: changeIndex[prev] });
     scrollToRow(changeIndex[prev]);
   }, [changeIndex, currentChangeIndex]);
 
@@ -204,6 +223,7 @@ export function WorkspaceLayout({
             currentChangeIndex={currentChangeIndex}
             changeIndex={changeIndex}
             scrollRef={scrollRefA}
+            firstRowRef={firstRowRef}
             onFileLoaded={onFileALoaded}
             highlightCells={highlightCells}
           />

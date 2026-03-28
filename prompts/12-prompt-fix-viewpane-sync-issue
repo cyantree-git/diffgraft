@@ -107,3 +107,39 @@ After the fix, test:
 
 Report the console.log output from step 3
 (navigating to change 2, the row 67 case).
+
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+Claude Reply 
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+
+⏺ Clean. The changes are ready. Here's what was done:
+
+  WorkspaceLayout.tsx:
+  - Added firstRowRef = useRef<HTMLTableRowElement | null>(null)
+  - Replaced hardcoded ROW_HEIGHT = 37 with getRowHeight() that calls firstRowRef.current?.getBoundingClientRect().height ?? 37
+  - scrollToRow now uses the measured height
+  - Added console.log in both scrollToRow and navigateNext/navigatePrev
+  - Passes firstRowRef to side A's FilePane
+
+  FilePane.tsx: Accepts and threads optional firstRowRef prop to DiffPaneTable.
+
+  DiffPaneTable.tsx: Accepts optional firstRowRef, attaches it to <tr> when i === 0.
+
+  ---
+  To confirm rowIndex is correct, run the app, navigate to change 2 (the row 67 case), and paste the console output here. The log will
+  show:
+  navigateNext { changePos: 1, arrayIndex: 66 }
+  navigating to { rowIndex: 66, rowHeight: <actual>, containerHeight: <actual>, targetScrollTop: <actual> }
+
+  If rowIndex matches the visible row number minus 1, the array index is correct and only the height was the issue. If rowIndex is wrong,
+  that tells us changeIndex has an offset.

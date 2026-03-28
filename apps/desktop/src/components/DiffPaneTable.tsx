@@ -1,3 +1,4 @@
+import type { MutableRefObject } from "react";
 import type { CsvSchema } from "../types/diffgraft";
 import type { UnifiedRow } from "../lib/unifiedRows";
 
@@ -8,6 +9,7 @@ interface Props {
   rawRows: string[][];
   currentChangeIndex: number;
   changeIndex: number[];
+  firstRowRef?: MutableRefObject<HTMLTableRowElement | null>;
   highlightCells: boolean;
 }
 
@@ -23,6 +25,7 @@ export function DiffPaneTable({
   rawRows,
   currentChangeIndex,
   changeIndex,
+  firstRowRef,
   highlightCells,
 }: Props) {
   const cols = schema.columns;
@@ -83,6 +86,7 @@ export function DiffPaneTable({
             <tr
               key={i}
               className={trClass}
+              ref={i === 0 && firstRowRef ? firstRowRef : undefined}
             >
               <td style={{ width: 48, textAlign: "right", color: "#475569", paddingRight: 8, fontSize: 11 }}>
                 {row.rowNumber}

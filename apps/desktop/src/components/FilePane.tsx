@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { MutableRefObject, RefObject } from "react";
 import type { CsvReadResult, CsvSchema } from "../types/diffgraft";
 import type { UnifiedRow } from "../lib/unifiedRows";
 import { DropZone } from "./DropZone";
@@ -12,6 +12,7 @@ interface Props {
   currentChangeIndex: number;
   changeIndex: number[];
   scrollRef: RefObject<HTMLDivElement>;
+  firstRowRef?: MutableRefObject<HTMLTableRowElement | null>;
   onFileLoaded: (result: CsvReadResult, name: string) => void;
   highlightCells: boolean;
 }
@@ -24,6 +25,7 @@ export function FilePane({
   currentChangeIndex,
   changeIndex,
   scrollRef,
+  firstRowRef,
   onFileLoaded,
   highlightCells,
 }: Props) {
@@ -47,6 +49,7 @@ export function FilePane({
         rawRows={file.rows}
         currentChangeIndex={currentChangeIndex}
         changeIndex={changeIndex}
+        firstRowRef={firstRowRef}
         highlightCells={highlightCells}
       />
     </div>
