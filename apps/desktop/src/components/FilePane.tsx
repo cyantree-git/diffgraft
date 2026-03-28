@@ -1,0 +1,57 @@
+import type { RefObject } from "react";
+import type { CsvReadResult, CsvSchema } from "../types/diffgraft";
+import type { UnifiedRow } from "../lib/unifiedRows";
+import { DropZone } from "./DropZone";
+import { DiffPaneTable } from "./DiffPaneTable";
+
+interface Props {
+  side: "A" | "B";
+  file: CsvReadResult | null;
+  schema: CsvSchema | null;
+  unifiedRows: UnifiedRow[] | null;
+  currentChangeIndex: number;
+  changeIndex: number[];
+  scrollRef: RefObject<HTMLDivElement>;
+  setRowRef: (i: number, el: HTMLTableRowElement | null) => void;
+  onFileLoaded: (result: CsvReadResult, name: string) => void;
+  highlightCells: boolean;
+}
+
+export function FilePane({
+  side,
+  file,
+  schema,
+  unifiedRows,
+  currentChangeIndex,
+  changeIndex,
+  scrollRef,
+  setRowRef,
+  onFileLoaded,
+  highlightCells,
+}: Props) {
+  if (!file || !schema) {
+    return (
+      <div style={{ width: "100%", height: "100%", padding: 24 }}>
+        <DropZone side={side} onFileLoaded={onFileLoaded} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={scrollRef}
+      className="pane-scroll-container"
+    >
+      <DiffPaneTable
+        side={side}
+        schema={schema}
+        unifiedRows={unifiedRows}
+        rawRows={file.rows}
+        currentChangeIndex={currentChangeIndex}
+        changeIndex={changeIndex}
+        setRowRef={setRowRef}
+        highlightCells={highlightCells}
+      />
+    </div>
+  );
+}
