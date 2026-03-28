@@ -32,8 +32,7 @@ pub fn export_csv(
                 .has_headers(false)
                 .from_writer(file);
 
-            let header: Vec<&str> =
-                schema.columns.iter().map(|c| c.name.as_str()).collect();
+            let header: Vec<&str> = schema.columns.iter().map(|c| c.name.as_str()).collect();
             writer.write_record(&header)?;
 
             for row in rows {
@@ -69,8 +68,8 @@ pub fn export_summary(result: &DiffResult) -> DiffSummary {
         .saturating_sub(deleted)
         .saturating_sub(modified);
 
-    let schema_changes_count = result.schema_diff.added_columns.len()
-        + result.schema_diff.removed_columns.len();
+    let schema_changes_count =
+        result.schema_diff.added_columns.len() + result.schema_diff.removed_columns.len();
 
     DiffSummary {
         added,
@@ -158,7 +157,11 @@ mod tests {
     #[test]
     fn test_export_csv_returns_string() {
         let schema = make_schema(&["id", "name", "value"]);
-        let data = rows(&[&["1", "alice", "10"], &["2", "bob", "20"], &["3", "charlie", "30"]]);
+        let data = rows(&[
+            &["1", "alice", "10"],
+            &["2", "bob", "20"],
+            &["3", "charlie", "30"],
+        ]);
         let result = export_csv(&data, &schema, None).unwrap();
         // Should have 4 lines: header + 3 data rows (trailing newline from csv crate).
         let lines: Vec<&str> = result.lines().collect();
@@ -275,9 +278,9 @@ mod tests {
     #[test]
     fn test_export_summary_counts() {
         let mut result = empty_diff_result(15, 12);
-        result.added_rows = vec![0, 1, 2];          // 3 added
-        result.deleted_rows = vec![3, 4];            // 2 deleted
-        // 5 modified rows
+        result.added_rows = vec![0, 1, 2]; // 3 added
+        result.deleted_rows = vec![3, 4]; // 2 deleted
+                                          // 5 modified rows
         result.modified_rows = (0..5)
             .map(|i| ModifiedRow {
                 key_values: vec![i.to_string()],

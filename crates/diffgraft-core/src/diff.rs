@@ -366,7 +366,7 @@ mod tests {
         assert_eq!(result.added_columns.len(), 2);
         assert_eq!(result.removed_columns.len(), 2);
         assert_eq!(result.common_columns.len(), 2); // id and age
-        // Original column order preserved
+                                                    // Original column order preserved
         assert_eq!(result.removed_columns[0].name, "first_name");
         assert_eq!(result.removed_columns[1].name, "last_name");
         assert_eq!(result.added_columns[0].name, "email");
@@ -626,12 +626,24 @@ mod tests {
         let schema = make_schema(&["country", "code", "name"]);
         let rows_a = vec![
             vec!["US".to_string(), "NYC".to_string(), "New York".to_string()],
-            vec!["US".to_string(), "LAX".to_string(), "Los Angeles".to_string()],
+            vec![
+                "US".to_string(),
+                "LAX".to_string(),
+                "Los Angeles".to_string(),
+            ],
             vec!["GB".to_string(), "LON".to_string(), "London".to_string()],
         ];
         let rows_b = vec![
-            vec!["US".to_string(), "NYC".to_string(), "New York City".to_string()], // modified
-            vec!["US".to_string(), "LAX".to_string(), "Los Angeles".to_string()],
+            vec![
+                "US".to_string(),
+                "NYC".to_string(),
+                "New York City".to_string(),
+            ], // modified
+            vec![
+                "US".to_string(),
+                "LAX".to_string(),
+                "Los Angeles".to_string(),
+            ],
             vec!["GB".to_string(), "LON".to_string(), "London".to_string()],
         ];
         let config = DiffConfig {
