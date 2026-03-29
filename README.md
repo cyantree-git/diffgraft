@@ -126,6 +126,3 @@ DiffGraft processes all files locally in your browser using WebAssembly. No data
 
 Apache 2.0 — see [LICENSE](LICENSE).
 
-## Built by
-
-Built by [th4t.dev/sid](https://th4t.dev/sid) at [CyanTree](https://cyantree.co.uk) — [diffgraft.io](https://diffgraft.io)
