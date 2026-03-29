@@ -1,0 +1,228 @@
+Read CONTEXT.md and .claude/CLAUDE.md before doing anything.
+
+Task: Write a professional README.md for DiffGraft.
+
+DiffGraft is a free, open source CSV diff tool that runs
+entirely in the browser using WebAssembly. Files never
+leave the user's machine.
+
+---
+
+## README requirements
+
+Tone:
+- Clear and direct
+- Written for developers and data analysts
+- No hype, no marketing speak
+- Let the features speak for themselves
+
+---
+
+## Structure
+
+### 1. Header
+- Project name: DiffGraft
+- One line description
+- Badges (see below)
+- Screenshot or demo GIF placeholder
+  Add this line: ![DiffGraft Screenshot](docs/screenshot.png)
+  We will add the actual screenshot later
+
+### 2. Badges
+Generate these badges using shields.io:
+- License: Apache 2.0
+- Built with Rust
+- Built with WebAssembly
+- Open Source
+
+Format:
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/built%20with-Rust-orange.svg)](https://www.rust-lang.org/)
+[![WebAssembly](https://img.shields.io/badge/powered%20by-WebAssembly-654FF0.svg)](https://webassembly.org/)
+
+### 3. What is DiffGraft
+Two paragraphs maximum.
+Explain the problem it solves.
+Explain what makes it different from other CSV diff tools.
+Mention: runs in browser, files never leave machine,
+primary key aware, cell-level highlighting.
+
+### 4. Features
+Use a clean list. No nested bullets. No bold everywhere.
+Cover:
+- Primary key aware diffing
+- Cell-level change highlighting
+- Side by side view with synced scroll
+- IntelliJ-style navigation (F7 / Shift+F7)
+- Drag and drop file loading
+- Export diff as JSON or CSV
+- Files never leave your browser (WebAssembly)
+- Works on files up to 200MB
+- Free and open source (Apache 2.0)
+- Desktop app available (Tauri)
+
+### 5. Try It
+Single line:
+👉 diffgraft.io
+
+### 6. How It Works
+Three steps, plain English:
+1. Open two CSV files (drag and drop or click to open)
+2. Set your primary key column (auto-detected)
+3. See exactly what changed — added, deleted, modified rows
+
+### 7. Why Primary Key Matching Matters
+Short section, 3-4 sentences.
+Explain the problem: re-sorted files show false differences
+without primary key matching.
+Example: 10,000 row CSV sorted Z-A instead of A-Z
+shows 9,847 false changes with naive text diff.
+With primary key matching: zero false changes.
+
+### 8. Tech Stack
+Clean table:
+
+| Layer | Technology |
+|-------|------------|
+| Diff engine | Rust |
+| Browser runtime | WebAssembly (wasm-bindgen) |
+| Desktop app | Tauri v2 |
+| Frontend | React + TypeScript |
+| Build tool | Vite |
+| Deployment | Cloudflare Pages |
+
+### 9. Running Locally
+
+#### Prerequisites
+- Rust (latest stable)
+- Node.js v18+
+- wasm-pack
+
+#### Desktop app
+\`\`\`bash
+git clone https://github.com/cyantree-git/diffgraft
+cd diffgraft/apps/desktop
+npm install
+npm run tauri dev
+\`\`\`
+
+#### Web app
+\`\`\`bash
+cd apps/web
+npm install
+npm run build:wasm
+npm run dev
+\`\`\`
+Open http://localhost:3001
+
+### 10. Project Structure
+\`\`\`
+diffgraft/
+├── crates/
+│   └── diffgraft-core/     Rust diff engine (platform agnostic)
+│       ├── src/reader.rs   CSV parsing
+│       ├── src/diff.rs     Structural diff algorithm
+│       ├── src/merge.rs    Cherry-pick merge engine
+│       ├── src/export.rs   JSON and CSV export
+│       └── src/wasm.rs     WebAssembly bindings
+├── apps/
+│   ├── desktop/            Tauri desktop application
+│   └── web/                Vite web application
+\`\`\`
+
+### 11. Running Tests
+\`\`\`bash
+cd crates/diffgraft-core
+cargo test
+\`\`\`
+63 unit tests covering diff engine, merge engine,
+and export functions.
+
+### 12. Contributing
+Short and welcoming.
+Cover:
+- Issues welcome for bugs and feature requests
+- PRs welcome
+- Run cargo test before submitting
+- Follow existing code style
+
+### 13. Roadmap
+Use a simple list:
+- [ ] Cherry-pick merge UI
+- [ ] JSON diff support
+- [ ] Parquet support (desktop)
+- [ ] CLI interface
+- [ ] MCP server for Claude Code integration
+- [ ] TreeGraft — Git merge intelligence (sister project)
+
+### 14. Privacy
+Short section, 3 sentences maximum.
+DiffGraft processes all files locally.
+No data is sent to any server.
+The source code is open for anyone to verify.
+
+### 15. License
+Apache 2.0 — see LICENSE file.
+
+### 16. Built by
+Built by th4tdevsid at CyanTree (cyantree.co.uk)
+Link to diffgraft.io
+
+---
+
+## Additional requirements
+
+- Use clean markdown throughout
+- No excessive emoji — maximum 3 total in the whole file
+- No horizontal rules (---) between every section
+- Section headers use ## and ### only
+- Code blocks use proper language tags
+- All links use https://
+- Keep it scannable — developers read READMEs quickly
+
+Save as README.md in the repo root.
+Do not modify any other files.
+
+After writing, do a self-check:
+- Is it under 200 lines? Good. Trim if longer.
+- Does every section add value? Remove any that don't.
+- Would a developer understand what this does in 30 seconds?
+  If not, rewrite the opening.
+
+Report: confirm README.md written and line count.
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+Claude Reply 
+
+########################################################
+########################################################
+########################################################
+########################################################
+
+
+
+⏺ Write(README.md)
+  ⎿  Wrote 131 lines to README.md
+      1 # DiffGraft
+      2
+      3 Structural CSV diff tool. Open two files, see exa
+        ctly what changed.
+      4
+      5 [![License](https://img.shields.io/badge/license-
+        Apache%202.0-blue.svg)](LICENSE)
+      6 [![Rust](https://img.shields.io/badge/built%20wit
+        h-Rust-orange.svg)](https://www.rust-lang.org/)
+      7 [![WebAssembly](https://img.shields.io/badge/powe
+        red%20by-WebAssembly-654FF0.svg)](https://webasse
+        mbly.org/)
+      8
+      9 ![DiffGraft Screenshot](docs/screenshot.png)
+     … +121 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ README.md written — 131 lines. All 16 sections included, 2 emoji total (👉 and none elsewhere), no horizontal rules between sections, under the 200-line target.
